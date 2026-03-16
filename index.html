@@ -1,0 +1,2844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Whiteboard - Infinite Canvas</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0d1117">
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import { getStroke } from 'https://cdn.skypack.dev/perfect-freehand';
+    window.getStroke = getStroke;
+  </script>
+  
+  <style>
+    :root {
+      --glass-bg: rgba(255, 255, 255, 0.04);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-hover: rgba(255, 255, 255, 0.08);
+      --glass-active: rgba(99, 102, 241, 0.3);
+      --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      --blur: blur(20px);
+      --blur-heavy: blur(40px);
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.4);
+      --border: rgba(255, 255, 255, 0.08);
+      --radius: 16px;
+    }
+
+    * {
+      transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      font-family: 'Inter', sans-serif;
+      background: radial-gradient(ellipse at 20% 50%, #0f0c29 0%, #1a0533 30%, #0d1117 60%, #020408 100%);
+      color: white;
+      touch-action: none; /* Prevent browser zoom/pan on mobile */
+    }
+
+    .glass {
+      background: var(--glass-bg);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--glass-shadow);
+    }
+
+    .glass-heavy {
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: var(--blur-heavy);
+      -webkit-backdrop-filter: var(--blur-heavy);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--glass-shadow);
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    @keyframes glow-pulse {
+      from { box-shadow: 0 0 10px var(--accent-glow); }
+      to { box-shadow: 0 0 25px var(--accent-glow); }
+    }
+    @keyframes slide-in-left {
+      from { transform: translateX(-20px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slide-in-right {
+      from { transform: translateX(20px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slide-in-up {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes scale-in {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    @keyframes scale-out {
+      from { transform: scale(1); opacity: 1; }
+      to { transform: scale(0.95); opacity: 0; }
+    }
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.4); }
+    }
+    @keyframes progress-fill {
+      from { width: 0%; }
+      to { width: 100%; }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .anim-float { animation: float 3s ease-in-out infinite; }
+    .anim-glow { animation: glow-pulse 2s alternate infinite; }
+    .anim-fade-in { animation: fade-in 0.25s ease forwards; }
+    .anim-scale-in { animation: scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+    .anim-spin { animation: spin 1s linear infinite; }
+
+    #bg-canvas, #canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
+    #bg-canvas {
+      z-index: 0;
+      pointer-events: none;
+    }
+    #canvas {
+      z-index: 1;
+      touch-action: none;
+    }
+
+    /* Loading Screen */
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: radial-gradient(ellipse at 20% 50%, #0f0c29 0%, #1a0533 30%, #0d1117 60%, #020408 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.5s ease;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="bg-canvas"></canvas>
+  <canvas id="canvas"></canvas>
+
+  <div id="loading-screen">
+    <div class="glass-heavy flex flex-col items-center" style="border-radius: 32px; padding: 48px 56px;">
+      <div class="anim-float anim-glow mb-6 flex items-center justify-center font-bold text-3xl" 
+           style="width: 64px; height: 64px; border-radius: 16px; background: linear-gradient(135deg, #4f46e5, #9333ea);">
+        W
+      </div>
+      <h1 class="text-2xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Whiteboard</h1>
+      <p class="text-gray-400 text-sm mb-6">Infinite canvas. Zero limits.</p>
+      
+      <div class="w-48 h-1 bg-white/10 rounded-full overflow-hidden mb-3">
+        <div id="loading-progress" class="h-full bg-indigo-500 rounded-full" style="animation: progress-fill 1.2s ease-out forwards;"></div>
+      </div>
+      <p id="loading-status" class="text-xs text-gray-500 font-mono">Initializing canvas...</p>
+    </div>
+  </div>
+
+  <!-- UI Container z-index 10 -->
+  <div id="ui-container" class="fixed inset-0 pointer-events-none z-10" style="opacity: 0; transition: opacity 0.5s ease;">
+    
+
+
+    <!-- Context Toolbar -->
+    <div class="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 pointer-events-auto glass-heavy rounded-full p-1" style="top: 64px;">
+      <button id="btn-undo" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3l-3 2.7"></path></svg></button>
+      <button id="btn-redo" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg></button>
+      <div class="w-px h-4 bg-white/10 mx-1"></div>
+      <button id="btn-align-left" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Align Left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="22" x2="4" y2="2"></line><rect x="8" y="6" width="12" height="4"></rect><rect x="8" y="14" width="8" height="4"></rect></svg></button>
+      <button id="btn-align-center" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Align Center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="22" x2="12" y2="2"></line><rect x="6" y="6" width="12" height="4"></rect><rect x="8" y="14" width="8" height="4"></rect></svg></button>
+      <button id="btn-align-right" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Align Right"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="20" y1="22" x2="20" y2="2"></line><rect x="4" y="6" width="12" height="4"></rect><rect x="8" y="14" width="8" height="4"></rect></svg></button>
+      <div class="w-px h-4 bg-white/10 mx-1"></div>
+      <button id="btn-group" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Group (Ctrl+G)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></button>
+      <button id="btn-ungroup" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Ungroup (Ctrl+Shift+G)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="14" y="14" width="7" height="7"></rect><path d="M3 3h7v7H3z"></path></svg></button>
+      <div class="w-px h-4 bg-white/10 mx-1"></div>
+      <button id="btn-delete" class="w-8 h-8 rounded-full flex items-center justify-center text-red-400 hover:text-red-300 hover:bg-red-500/20 transition-colors" title="Delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+    </div>
+
+    <!-- Left Toolbar -->
+    <div id="left-toolbar" class="absolute left-0 top-1/2 -translate-y-1/2 ml-4 flex flex-col items-center p-2 gap-1 rounded-[20px] pointer-events-auto glass-heavy shadow-2xl max-h-[calc(100vh-120px)] overflow-y-auto" style="scrollbar-width: none;">
+      <!-- Tools will be injected here via JS to avoid huge HTML blocks -->
+    </div>
+
+    <!-- Right Properties Panel -->
+    <aside id="properties-panel" class="absolute right-0 w-[264px] rounded-l-[20px] pointer-events-auto glass-heavy flex flex-col overflow-y-auto z-40" style="top: 56px; bottom: 36px;">
+      <div class="p-4 border-b border-white/5 disabled-group text-sm">
+        <label class="block text-gray-300 mb-2 font-medium">Stroke Color</label>
+        <div class="flex items-center gap-2 mb-3">
+          <label class="w-9 h-7 rounded bg-indigo-500 cursor-pointer overflow-hidden border border-white/20 shadow-inner flex-shrink-0 relative">
+            <input type="color" id="prop-stroke" class="absolute opacity-0 w-10 h-10 -top-2 -left-2 cursor-pointer" value="#6366f1">
+          </label>
+          <div class="flex gap-1.5 flex-wrap">
+            <button class="color-swatch w-5 h-5 rounded-sm bg-white border border-white/20 hover:scale-110 transition-transform" data-color="#ffffff"></button>
+            <button class="color-swatch w-5 h-5 rounded-sm bg-gray-500 border border-white/20 hover:scale-110 transition-transform" data-color="#6b7280"></button>
+            <button class="color-swatch w-5 h-5 rounded-sm bg-red-500 border border-white/20 hover:scale-110 transition-transform" data-color="#ef4444"></button>
+            <button class="color-swatch w-5 h-5 rounded-sm bg-amber-500 border border-white/20 hover:scale-110 transition-transform" data-color="#f59e0b"></button>
+            <button class="color-swatch w-5 h-5 rounded-sm bg-green-500 border border-white/20 hover:scale-110 transition-transform" data-color="#10b981"></button>
+            <button class="color-swatch w-5 h-5 rounded-sm bg-indigo-500 border border-white/20 hover:scale-110 transition-transform" data-color="#6366f1"></button>
+            <label class="w-5 h-5 rounded-sm cursor-pointer hover:scale-110 transition-transform overflow-hidden relative border border-white/20" title="More Colors (RGB)" style="background: conic-gradient(from 180deg at 50% 50%, #f00 0deg, #ff0 60deg, #0f0 120deg, #0ff 180deg, #00f 240deg, #f0f 300deg, #f00 360deg);">
+              <input type="color" id="prop-stroke-custom" class="absolute opacity-0 w-10 h-10 -top-2 -left-2 cursor-pointer" value="#ffffff">
+            </label>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Top Nav moved to follow properties-panel for natural top-stacking -->
+    <header class="glass absolute top-0 left-0 right-0 z-[999] pointer-events-auto flex items-center justify-between px-4" style="height: 56px;">
+      <div class="flex items-center gap-3">
+        <div class="anim-glow flex items-center justify-center font-bold text-white shadow-lg" 
+             style="width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #4f46e5, #9333ea);">
+          W
+        </div>
+        <div class="font-semibold text-white tracking-wide">Whiteboard</div>
+        <div class="glass-heavy text-xs px-2 py-0.5 rounded-full font-mono text-indigo-300">v1.0</div>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex -space-x-2">
+          <div class="w-7 h-7 rounded-full border border-indigo-500/30 flex items-center justify-center text-xs font-bold bg-gradient-to-br from-indigo-500 to-purple-600 relative">
+            A
+            <div class="absolute bottom-0 right-0 w-2 h-2 bg-green-400 rounded-full border border-gray-900 anim-pulse-dot"></div>
+          </div>
+          <div class="w-7 h-7 rounded-full border border-cyan-500/30 flex items-center justify-center text-xs font-bold bg-gradient-to-br from-cyan-500 to-blue-600">M</div>
+          <div class="w-7 h-7 rounded-full border border-amber-500/30 flex items-center justify-center text-xs font-bold bg-gradient-to-br from-amber-500 to-orange-600">J</div>
+        </div>
+        <div class="w-px h-6 bg-white/10"></div>
+        <button id="btn-share" class="glass-heavy w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all text-white">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+        </button>
+        <div class="relative group">
+          <button id="btn-export" class="glass-heavy w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all text-white relative z-10">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          </button>
+          
+          <!-- Dropdown Menu -->
+          <div class="absolute right-0 top-full mt-3 w-64 rounded-2xl p-1.5 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all z-[1000] shadow-[0_20px_50px_rgba(0,0,0,1)] border border-white/20 origin-top-right transform group-hover:scale-100 scale-95 duration-200 bg-[#0d1117]">
+            <div class="px-4 py-3 text-[10px] font-bold text-gray-500 uppercase tracking-[2px] border-b border-white/5 mb-1.5">Export Project</div>
+            
+            <button id="btn-export-png" class="w-full text-left px-3 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-all flex items-center justify-between group/item">
+              <span class="flex items-center gap-4">
+                <span class="w-10 h-10 rounded-xl bg-indigo-600/20 flex items-center justify-center text-[11px] font-black text-indigo-400 border border-indigo-500/20 shadow-inner">PNG</span>
+                <span class="font-semibold tracking-tight text-gray-100">Image (Transparent)</span>
+              </span>
+            </button>
+            
+            <button id="btn-export-jpeg" class="w-full text-left px-3 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-all flex items-center justify-between group/item">
+              <span class="flex items-center gap-4">
+                <span class="w-10 h-10 rounded-xl bg-blue-600/20 flex items-center justify-center text-[11px] font-black text-blue-400 border border-blue-500/20 shadow-inner">JPG</span>
+                <span class="font-semibold tracking-tight text-gray-100">Flat Photo</span>
+              </span>
+            </button>
+            
+            <button id="btn-export-svg" class="w-full text-left px-3 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-all flex items-center justify-between group/item">
+              <span class="flex items-center gap-4">
+                <span class="w-10 h-10 rounded-xl bg-orange-600/20 flex items-center justify-center text-[11px] font-black text-orange-400 border border-orange-500/20 shadow-inner">SVG</span>
+                <span class="font-semibold tracking-tight text-gray-100">Vector Illustration</span>
+              </span>
+            </button>
+            
+            <div class="h-px bg-white/5 my-2 mx-3"></div>
+            
+            <button id="btn-export-json" class="w-full text-left px-3 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-all flex items-center justify-between group/item">
+              <span class="flex items-center gap-4">
+                <span class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-[11px] font-black text-emerald-400 border border-emerald-500/20 shadow-inner">JSON</span>
+                <span class="font-semibold tracking-tight">Project Source File</span>
+              </span>
+            </button>
+          </div>
+        </div>
+        <button id="btn-settings" class="glass-heavy w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all text-white">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+      </div>
+    </header>
+        
+        <label class="block text-gray-300 mb-2 mt-4 font-medium">Fill Color</label>
+        <div class="flex items-center gap-2">
+          <label class="w-9 h-7 rounded bg-transparent cursor-pointer overflow-hidden border border-white/20 shadow-inner flex-shrink-0 relative" style="background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%); background-size: 10px 10px; background-position: 0 0, 0 5px, 5px -5px, -5px 0px;">
+            <input type="color" id="prop-fill" class="absolute opacity-0 w-10 h-10 -top-2 -left-2 cursor-pointer" value="#000000">
+          </label>
+          <button id="prop-fill-clear" class="flex-1 text-xs bg-white/5 hover:bg-white/10 py-1.5 rounded border border-white/10 transition-colors">Transparent</button>
+          <label class="w-7 h-7 rounded-sm cursor-pointer hover:scale-110 transition-transform overflow-hidden relative border border-white/20 flex-shrink-0" title="More Colors (RGB)" style="background: conic-gradient(from 180deg at 50% 50%, #f00 0deg, #ff0 60deg, #0f0 120deg, #0ff 180deg, #00f 240deg, #f0f 300deg, #f00 360deg);">
+             <input type="color" id="prop-fill-custom" class="absolute opacity-0 w-10 h-10 -top-2 -left-2 cursor-pointer" value="#ffffff">
+          </label>
+        </div>
+      </div>
+      
+      <div class="p-4 border-b border-white/5 disabled-group text-sm">
+        <div class="flex justify-between mb-2">
+          <label class="text-gray-300 font-medium">Stroke Width</label>
+          <span id="prop-width-val" class="text-gray-400 font-mono text-xs">2px</span>
+        </div>
+        <input type="range" id="prop-width" min="1" max="50" value="2" class="w-full appearance-none bg-white/10 h-1 rounded-full outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-indigo-400 [&::-webkit-slider-thumb]:rounded-full cursor-pointer">
+      </div>
+      
+      <div id="prop-section-text" class="p-4 border-b border-white/5 disabled-group text-sm" style="display: none;">
+        <label class="block text-gray-300 mb-2 font-medium">Font Family</label>
+        <select id="prop-font-family" class="w-full bg-white/10 border border-white/20 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-1.5 outline-none mb-3">
+          <option value="Inter" class="bg-gray-800">Inter</option>
+          <option value="JetBrains Mono" class="bg-gray-800">JetBrains Mono</option>
+          <option value="Arial" class="bg-gray-800">Arial</option>
+          <option value="'Times New Roman'" class="bg-gray-800">Times New Roman</option>
+          <option value="'Comic Sans MS'" class="bg-gray-800">Comic Sans MS</option>
+        </select>
+        <div class="flex gap-2 mb-3">
+          <input type="number" id="prop-font-size" value="24" min="8" max="144" class="w-16 bg-white/10 border border-white/20 text-white text-sm rounded outline-none px-2 py-1 text-center font-mono">
+          <div class="flex flex-1 rounded overflow-hidden relative">
+            <button id="prop-font-bold" class="flex-1 bg-white/5 border border-white/20 hover:bg-white/10 text-gray-400 font-bold transition-colors">B</button>
+            <button id="prop-font-italic" class="flex-1 bg-white/5 border border-white/20 border-l-0 hover:bg-white/10 text-gray-400 italic font-serif transition-colors">I</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="p-4 border-b border-white/5 disabled-group text-sm">
+        <label class="block text-gray-300 mb-2 font-medium">Dash Style</label>
+        <div class="flex gap-2">
+          <button class="dash-btn flex-1 py-1 rounded border border-indigo-500 bg-indigo-500/20 text-white" data-dash="solid">Solid</button>
+          <button class="dash-btn flex-1 py-1 rounded border border-white/10 hover:bg-white/5 text-gray-400" data-dash="dashed">Dash</button>
+          <button class="dash-btn flex-1 py-1 rounded border border-white/10 hover:bg-white/5 text-gray-400" data-dash="dotted">Dot</button>
+        </div>
+      </div>
+      
+      <div class="p-4 border-b border-white/5 disabled-group text-sm">
+        <div class="flex justify-between mb-2">
+          <label class="text-gray-300 font-medium">Opacity</label>
+          <span id="prop-opacity-val" class="text-gray-400 font-mono text-xs">100%</span>
+        </div>
+        <input type="range" id="prop-opacity" min="0" max="100" value="100" class="w-full appearance-none bg-white/10 h-1 rounded-full outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-indigo-400 [&::-webkit-slider-thumb]:rounded-full cursor-pointer">
+      </div>
+    </aside>
+
+    <!-- Bottom Status Bar -->
+    <footer class="glass absolute bottom-0 left-0 right-0 pointer-events-auto flex items-center justify-between px-4 text-xs font-mono text-gray-400" style="height: 36px;">
+      <div class="flex items-center gap-2">
+        <button id="zoom-out" class="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center">-</button>
+        <span id="zoom-display" class="w-12 text-center">100%</span>
+        <button id="zoom-in" class="w-6 h-6 rounded hover:bg-white/10 flex items-center justify-center">+</button>
+      </div>
+      <div id="element-count">Elements: 0</div>
+      <div class="flex items-center gap-2">
+        <div id="save-dot" class="w-2 h-2 rounded-full bg-green-500"></div>
+        <span id="save-status">Saved</span>
+      </div>
+    </footer>
+
+    <!-- Minimap Widget -->
+    <div id="minimap" class="absolute bottom-11 right-4 w-[200px] rounded-[14px] glass-heavy flex flex-col overflow-hidden pointer-events-auto transition-all origin-bottom-right duration-300 shadow-2xl">
+      <div id="minimap-header" class="h-6 bg-white/5 flex items-center justify-between px-2 cursor-pointer hover:bg-white/10 transition-colors">
+        <span class="text-[10px] tracking-wider uppercase text-gray-400 font-semibold select-none">Overview</span>
+        <svg id="minimap-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 0.3s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
+      <div id="minimap-content" class="transition-all duration-300 border-t border-white/10" style="height: 124px; overflow: hidden;">
+        <canvas id="minimap-canvas" width="200" height="124" class="w-full cursor-crosshair"></canvas>
+      </div>
+    </div>
+
+    <!-- Layers Panel -->
+    <div id="layers-panel" class="absolute left-16 top-[72px] w-[240px] rounded-[14px] glass-heavy flex flex-col pointer-events-auto shadow-2xl overflow-hidden" style="display: none; max-height: calc(100vh - 120px);">
+      <div class="h-10 bg-white/5 border-b border-white/10 flex items-center justify-between px-3">
+        <span class="text-sm font-semibold text-white">Layers</span>
+        <button id="btn-add-layer" class="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+      </div>
+      <div id="layers-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+    
+    <!-- Frames Panel -->
+    <div id="frames-panel" class="absolute left-16 top-[72px] w-[240px] rounded-[14px] glass-heavy flex flex-col pointer-events-auto shadow-2xl overflow-hidden" style="display: none; max-height: calc(100vh - 120px);">
+      <div class="h-10 bg-white/5 border-b border-white/10 flex items-center justify-between px-3">
+        <span class="text-sm font-semibold text-white">Frames</span>
+      </div>
+      <div id="frames-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+    
+    <!-- Settings Modal Overlay -->
+    <div id="settings-modal" class="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 pointer-events-auto flex items-center justify-center" style="display:none;">
+      <div class="glass-heavy w-[400px] rounded-2xl p-6 relative">
+        <h2 class="text-xl font-bold text-white mb-6">Settings</h2>
+        <button id="settings-close" class="absolute top-4 right-4 text-gray-400 hover:text-white"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-gray-300">Snap to Grid</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="setting-snap-grid" class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+            </label>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-gray-300">Snap to Objects</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="setting-snap-objects" class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+            </label>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-gray-300">Grid Style</span>
+            <select id="setting-grid-mode" class="bg-gray-800 border border-white/20 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-32 p-1.5 outline-none">
+              <option value="none" class="bg-gray-800 text-white">None</option>
+              <option value="dots" class="bg-gray-800 text-white">Dots</option>
+              <option value="squares" class="bg-gray-800 text-white">Squares</option>
+              <option value="isometric" class="bg-gray-800 text-white">Isometric</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Context Menu -->
+    <div id="context-menu" class="absolute glass-heavy rounded-lg border border-white/10 shadow-2xl overflow-hidden py-1 w-48 z-50 pointer-events-auto" style="display: none;">
+      <button class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-indigo-500 hover:text-white transition-colors flex justify-between">Bring Forward <span>]</span></button>
+      <button class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-indigo-500 hover:text-white transition-colors flex justify-between">Send Backward <span>[</span></button>
+      <div class="h-px bg-white/10 my-1"></div>
+      <button class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-indigo-500 hover:text-white transition-colors flex justify-between">Copy <span>Ctrl+C</span></button>
+      <button class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-indigo-500 hover:text-white transition-colors flex justify-between">Paste <span>Ctrl+V</span></button>
+      <div class="h-px bg-white/10 my-1"></div>
+      <button class="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500 hover:text-white transition-colors flex justify-between">Delete <span>Del</span></button>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="absolute bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-50 pointer-events-none"></div>
+
+  </div>
+
+  <script>
+    // --- Utilities ---
+    const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
+
+    // --- Ambient Background System ---
+    class AmbientBackground {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.orbs = [];
+        this.colors = ['#4f46e5', '#7c3aed', '#0f766e', '#1d4ed8', '#6d28d9', '#0e7490'];
+        this.init();
+        
+        window.addEventListener('resize', () => this.resize());
+        this.resize();
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+      }
+      
+      init() {
+        this.orbs = [];
+        for (let i = 0; i < 60; i++) {
+          this.orbs.push({
+            x: Math.random() * window.innerWidth,
+            y: Math.random() * window.innerHeight,
+            vx: (Math.random() - 0.5) * 0.3,
+            vy: (Math.random() - 0.5) * 0.3,
+            radius: 80 + Math.random() * 200,
+            color: this.colors[Math.floor(Math.random() * this.colors.length)],
+            opacity: 0.03 + Math.random() * 0.05,
+            opDir: Math.random() > 0.5 ? 1 : -1,
+            opSpeed: 0.0005 + Math.random() * 0.001
+          });
+        }
+      }
+
+      resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+      }
+
+      animate() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        for (const orb of this.orbs) {
+          orb.x += orb.vx;
+          orb.y += orb.vy;
+          
+          if (orb.x < -orb.radius || orb.x > this.canvas.width + orb.radius) orb.vx *= -1;
+          if (orb.y < -orb.radius || orb.y > this.canvas.height + orb.radius) orb.vy *= -1;
+          
+          orb.opacity += orb.opDir * orb.opSpeed;
+          if (orb.opacity >= 0.08 || orb.opacity <= 0.03) orb.opDir *= -1;
+          
+          const grad = this.ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, orb.radius);
+          // extract rgb from hex
+          const r = parseInt(orb.color.slice(1,3), 16);
+          const g = parseInt(orb.color.slice(3,5), 16);
+          const b = parseInt(orb.color.slice(5,7), 16);
+          
+          grad.addColorStop(0, `rgba(${r},${g},${b},${orb.opacity})`);
+          grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+          
+          this.ctx.fillStyle = grad;
+          this.ctx.beginPath();
+          this.ctx.arc(orb.x, orb.y, orb.radius, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+        
+        requestAnimationFrame(this.animate);
+      }
+    }
+
+    // --- Core Architecture System ---
+    class Element {
+      constructor() {
+        this.id = crypto.randomUUID();
+        this.type = 'base';
+        this.x = 0;
+        this.y = 0;
+        this.width = 0;
+        this.height = 0;
+        this.rotation = 0;
+        this.strokeColor = '#6366f1';
+        this.fillColor = 'transparent';
+        this.strokeWidth = 2;
+        this.opacity = 1;
+        this.dashStyle = [];
+        this.locked = false;
+        this.visible = true;
+        this.layerId = null;
+      }
+      
+      render(ctx) {}
+      
+      getBoundingBox() {
+        return { x: this.x, y: this.y, width: this.width, height: this.height };
+      }
+      
+      containsPoint(wx, wy) {
+        let px = wx;
+        let py = wy;
+        if (this.rotation) {
+          const cx = this.x + this.width/2;
+          const cy = this.y + this.height/2;
+          const dx = wx - cx;
+          const dy = wy - cy;
+          px = cx + dx * Math.cos(-this.rotation) - dy * Math.sin(-this.rotation);
+          py = cy + dx * Math.sin(-this.rotation) + dy * Math.cos(-this.rotation);
+        }
+        const {x, y, width, height} = this.getBoundingBox();
+        return px >= x && px <= x + width && py >= y && py <= y + height;
+      }
+      
+      toJSON() {
+        return { ...this };
+      }
+      static fromJSON(data) {
+        let el;
+        switch(data.type) {
+          case 'stroke': el = new StrokeElement(); break;
+          case 'rect': el = new RectElement(); break;
+          case 'ellipse': el = new EllipseElement(); break;
+          case 'line': el = new LineElement(); break;
+          case 'arrow': el = new ArrowElement(); break;
+          case 'text': el = new TextElement(); break;
+          case 'sticky': el = new StickyElement(); break;
+          case 'image': el = new ImageElement(); break;
+          case 'frame': el = new FrameElement(); break;
+          default: el = new Element();
+        }
+        Object.assign(el, data);
+        if (el.type === 'image' && el.src) el.loadImage(el.src);
+        return el;
+      }
+    }
+
+    class StrokeElement extends Element {
+      constructor() {
+        super();
+        this.type = 'stroke';
+        this.points = [];
+      }
+      render(ctx) {
+        if (this.points.length === 0 || !window.getStroke) return;
+        const strokeData = window.getStroke(this.points, {
+          size: this.strokeWidth * 2,
+          thinning: this.dashStyle.includes('highlighter') ? 0 : 0.5,
+          smoothing: 0.5,
+          streamline: 0.5
+        });
+        if (strokeData.length === 0) return;
+        
+        ctx.beginPath();
+        ctx.moveTo(strokeData[0][0], strokeData[0][1]);
+        for (let i = 1; i < strokeData.length; i++) {
+          ctx.lineTo(strokeData[i][0], strokeData[i][1]);
+        }
+        ctx.closePath();
+        
+        ctx.fillStyle = this.strokeColor;
+        ctx.fill();
+        
+        // Handle bounding box logic dynamically
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const pt of this.points) {
+          if (pt[0] < minX) minX = pt[0];
+          if (pt[1] < minY) minY = pt[1];
+          if (pt[0] > maxX) maxX = pt[0];
+          if (pt[1] > maxY) maxY = pt[1];
+        }
+        this.x = minX; this.y = minY;
+        this.width = maxX - minX; this.height = maxY - minY;
+      }
+    }
+
+    class RectElement extends Element {
+      constructor() {
+        super();
+        this.type = 'rect';
+        this.cornerRadius = 8;
+        this.text = ''; // Flowchart text directly inside
+      }
+      render(ctx) {
+        ctx.beginPath();
+        ctx.roundRect(this.x, this.y, this.width, this.height, this.cornerRadius);
+        if (this.fillColor !== 'transparent') {
+          ctx.fillStyle = this.fillColor;
+          ctx.fill();
+        }
+        ctx.lineWidth = this.strokeWidth;
+        ctx.strokeStyle = this.strokeColor;
+        if (this.dashStyle && this.dashStyle.length > 0) ctx.setLineDash(this.dashStyle);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        if (this.text) {
+          // Render center-aligned text
+          ctx.fillStyle = this.strokeColor;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = `${this.strokeWidth * 10}px Inter`;
+          ctx.fillText(this.text, this.x + this.width/2, this.y + this.height/2);
+        }
+      }
+    }
+
+    class EllipseElement extends Element {
+      constructor() {
+        super();
+        this.type = 'ellipse';
+        this.text = '';
+      }
+      render(ctx) {
+        ctx.beginPath();
+        const rx = this.width / 2;
+        const ry = this.height / 2;
+        ctx.ellipse(this.x + rx, this.y + ry, rx, ry, 0, 0, Math.PI * 2);
+        if (this.fillColor !== 'transparent') {
+          ctx.fillStyle = this.fillColor;
+          ctx.fill();
+        }
+        ctx.lineWidth = this.strokeWidth;
+        ctx.strokeStyle = this.strokeColor;
+        if (this.dashStyle && this.dashStyle.length > 0) ctx.setLineDash(this.dashStyle);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        if (this.text) {
+          ctx.fillStyle = this.strokeColor;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = `${this.strokeWidth * 10}px Inter`;
+          ctx.fillText(this.text, this.x + rx, this.y + ry);
+        }
+      }
+    }
+
+    class LineElement extends Element {
+      constructor() {
+        super();
+        this.type = 'line';
+        this.x2 = 0;
+        this.y2 = 0;
+        this.connectedStartId = null; // Smart connectors
+        this.connectedEndId = null;
+      }
+      getBoundingBox() {
+        return {
+          x: Math.min(this.x, this.x2),
+          y: Math.min(this.y, this.y2),
+          width: Math.abs(this.x - this.x2) || 1,
+          height: Math.abs(this.y - this.y2) || 1
+        };
+      }
+      render(ctx) {
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x2, this.y2);
+        ctx.lineWidth = this.strokeWidth;
+        ctx.strokeStyle = this.strokeColor;
+        if (this.dashStyle && this.dashStyle.length > 0) ctx.setLineDash(this.dashStyle);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    class ArrowElement extends LineElement {
+      constructor() {
+        super();
+        this.type = 'arrow';
+        this.arrowStyle = 'filled';
+      }
+      render(ctx) {
+        super.render(ctx);
+        const angle = Math.atan2(this.y2 - this.y, this.x2 - this.x);
+        const headlen = 10 + this.strokeWidth * 2;
+        
+        ctx.save();
+        ctx.translate(this.x2, this.y2);
+        ctx.rotate(angle);
+        
+        ctx.beginPath();
+        if (this.arrowStyle === 'filled') {
+          ctx.moveTo(0, 0);
+          ctx.lineTo(-headlen, headlen / 2);
+          ctx.lineTo(-headlen, -headlen / 2);
+          ctx.closePath();
+          ctx.fillStyle = this.strokeColor;
+          ctx.fill();
+        } else {
+          ctx.moveTo(-headlen, headlen / 2);
+          ctx.lineTo(0, 0);
+          ctx.lineTo(-headlen, -headlen / 2);
+          ctx.lineWidth = this.strokeWidth;
+          ctx.strokeStyle = this.strokeColor;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    class TextElement extends Element {
+      constructor() {
+        super();
+        this.type = 'text';
+        this.text = '';
+        this.fontFamily = 'Inter';
+        this.fontSize = 24;
+        this.fontWeight = 400;
+        this.fontStyle = 'normal';
+        this.textAlign = 'left';
+        this.lineHeight = 1.5;
+      }
+      render(ctx) {
+        ctx.save();
+        ctx.font = `${this.fontStyle} ${this.fontWeight} ${this.fontSize}px ${this.fontFamily}`;
+        
+        const lines = this.text.split('\n');
+        let nativeWidth = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const w = ctx.measureText(lines[i]).width;
+          if (w > nativeWidth) nativeWidth = w;
+        }
+        let nativeHeight = Math.max(1, lines.length * this.fontSize * this.lineHeight);
+        nativeWidth = Math.max(1, nativeWidth);
+
+        // Update dimensions continuously so Selection Tool handles match
+        this.width = nativeWidth;
+        this.height = nativeHeight;
+
+        ctx.fillStyle = this.strokeColor || '#ffffff';
+        ctx.textAlign = this.textAlign || 'left';
+        ctx.textBaseline = 'top';
+        
+        for (let i = 0; i < lines.length; i++) {
+            let dx = this.x;
+            if (ctx.textAlign === 'center') dx = this.x + nativeWidth / 2;
+            else if (ctx.textAlign === 'right') dx = this.x + nativeWidth;
+            
+            ctx.fillText(lines[i], dx, this.y + (i * this.fontSize * this.lineHeight));
+        }
+        ctx.restore();
+      }
+    }
+
+    class StickyElement extends RectElement {
+      constructor() {
+        super();
+        this.type = 'sticky';
+        this.noteColor = '#fef3c7'; // pastel default
+        this.textElementId = null; // linked text element
+      }
+      render(ctx) {
+        ctx.beginPath();
+        ctx.roundRect(this.x, this.y, this.width, this.height, 4);
+        ctx.fillStyle = this.noteColor;
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+        ctx.stroke();
+        
+        if (this.text) {
+          ctx.fillStyle = '#1f2937'; // dark text on sticky
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = `16px Inter`;
+          const lines = this.text.split('\n');
+          for (let i=0; i<lines.length; i++) {
+            ctx.fillText(lines[i], this.x + this.width/2, this.y + this.height/2 + (i - lines.length/2)*20);
+          }
+        }
+      }
+    }
+
+    class ImageElement extends Element {
+      constructor() {
+        super();
+        this.type = 'image';
+        this.src = null;
+        this.img = null;
+      }
+      loadImage(src) {
+        this.src = src;
+        this.img = new Image();
+        this.img.src = src;
+      }
+      render(ctx) {
+        if (this.img && this.img.complete) {
+          ctx.drawImage(this.img, this.x, this.y, this.width, this.height);
+        }
+      }
+    }
+
+    class FrameElement extends Element {
+      constructor() {
+        super();
+        this.type = 'frame';
+        this.name = 'Frame';
+      }
+      render(ctx) {
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#4f46e5';
+        ctx.strokeRect(this.x, this.y, this.width, this.height);
+        
+        ctx.fillStyle = 'rgba(79, 70, 229, 0.1)';
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        
+        ctx.font = '12px Inter';
+        const tw = ctx.measureText(this.name).width;
+        ctx.fillStyle = '#4f46e5';
+        ctx.beginPath();
+        ctx.roundRect(this.x, this.y - 20, tw + 16, 20, [4, 4, 0, 0]);
+        ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.fillText(this.name, this.x + 8, this.y - 10);
+      }
+    }
+
+    class Layer {
+      constructor(name) {
+        this.id = crypto.randomUUID();
+        this.name = name;
+        this.visible = true;
+        this.locked = false;
+        this.elements = [];
+      }
+    }
+
+    class Board {
+      constructor() {
+        this.layers = [new Layer('Layer 1')];
+      }
+      
+      addElement(element, layerId = null) {
+        const layer = layerId ? this.layers.find(l => l.id === layerId) : this.layers[0];
+        if (layer) {
+          element.layerId = layer.id;
+          layer.elements.push(element);
+        }
+      }
+      
+      removeElement(id) {
+        for (const layer of this.layers) {
+          const idx = layer.elements.findIndex(e => e.id === id);
+          if (idx !== -1) {
+            return layer.elements.splice(idx, 1)[0];
+          }
+        }
+        return null;
+      }
+      
+      findElement(id) {
+        for (const layer of this.layers) {
+          const el = layer.elements.find(e => e.id === id);
+          if (el) return el;
+        }
+        return null;
+      }
+      
+      getAllElements() {
+        const result = [];
+        for (let i = this.layers.length - 1; i >= 0; i--) {
+          const layer = this.layers[i];
+          if (layer.visible && !layer.locked) {
+            result.push(...layer.elements);
+          }
+        }
+        return result; // render order (bottom to top based on array order?) 
+        // Wait, array order: 0 is bottom. So let's iterate 0 to length
+      }
+
+      toJSON() {
+        return { layers: this.layers.map(l => ({...l, elements: l.elements.map(e => e.toJSON())})) };
+      }
+      
+      fromJSON(data) {
+        if (data && data.layers) {
+          this.layers = data.layers;
+        }
+      }
+    }
+
+    // Fix getAllElements render order
+    Board.prototype.getAllElements = function() {
+      const result = [];
+      for (const layer of this.layers) {
+        if (layer.visible) {
+          // even locked ones render, they are just untouchable for tool interactions... wait, requirements say: "getAllElements() returning elements from all visible unlocked layers in render order"
+          // I'll stick to requirement: visible unlocked
+          if (!layer.locked) {
+            result.push(...layer.elements.filter(e => e.visible));
+          }
+        }
+      }
+      return result;
+    };
+
+    class GridRenderer {
+      constructor(engine) {
+        this.engine = engine;
+        this.mode = 'none'; // none, dots, squares, isometric
+        this.size = 20;
+      }
+      render(ctx) {
+        if (this.mode === 'none') return;
+        
+        const zoom = this.engine.viewport.zoom;
+        const width = this.engine.canvas.width / this.engine.dpr;
+        const height = this.engine.canvas.height / this.engine.dpr;
+        
+        // Bounds in world space
+        const left = -this.engine.viewport.x / zoom;
+        const right = (width - this.engine.viewport.x) / zoom;
+        const top = -this.engine.viewport.y / zoom;
+        const bottom = (height - this.engine.viewport.y) / zoom;
+        
+        const startX = Math.floor(left / this.size) * this.size;
+        const endX = Math.ceil(right / this.size) * this.size;
+        const startY = Math.floor(top / this.size) * this.size;
+        const endY = Math.ceil(bottom / this.size) * this.size;
+
+        ctx.save();
+        if (this.mode === 'dots') {
+          const opacity = Math.min(1, zoom) * 0.15;
+          ctx.fillStyle = `rgba(255,255,255,${opacity})`;
+          if (zoom > 0.3 && zoom < 8) {
+             for (let x = startX; x <= endX; x += this.size) {
+               for (let y = startY; y <= endY; y += this.size) {
+                 ctx.fillRect(x - 0.75/zoom, y - 0.75/zoom, 1.5/zoom, 1.5/zoom);
+               }
+             }
+          }
+        } else if (this.mode === 'squares') {
+          ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+          ctx.lineWidth = 1/zoom;
+          ctx.beginPath();
+          for (let x = startX; x <= endX; x += this.size) { ctx.moveTo(x, top); ctx.lineTo(x, bottom); }
+          for (let y = startY; y <= endY; y += this.size) { ctx.moveTo(left, y); ctx.lineTo(right, y); }
+          ctx.stroke();
+        } else if (this.mode === 'isometric') {
+          ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+          ctx.lineWidth = 1/zoom;
+          ctx.beginPath();
+          const tan30 = Math.tan(Math.PI / 6);
+          // Simplified isometric lines
+          for (let x = startX - height; x <= endX + height; x += this.size) {
+             ctx.moveTo(x, startY);
+             ctx.lineTo(x + height * tan30, bottom);
+             ctx.moveTo(x, startY);
+             ctx.lineTo(x - height * tan30, bottom);
+          }
+          for (let y = startY; y <= endY; y += this.size) { ctx.moveTo(left, y); ctx.lineTo(right, y); }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+
+    class Command {
+      execute() {}
+      undo() {}
+    }
+
+    class AddElementCommand extends Command {
+      constructor(board, element, layerId = null) {
+        super();
+        this.board = board;
+        this.element = element;
+        this.layerId = layerId;
+      }
+      execute() { this.board.addElement(this.element, this.layerId); }
+      undo() { this.board.removeElement(this.element.id); }
+    }
+
+    class RemoveElementsCommand extends Command {
+      constructor(board, elements) {
+        super();
+        this.board = board;
+        this.elements = elements;
+        this.removedData = [];
+      }
+      execute() {
+        this.removedData = [];
+        for (const el of this.elements) {
+          const removed = this.board.removeElement(el.id);
+          if (removed) {
+            this.removedData.push({ element: removed, layerId: removed.layerId });
+          }
+        }
+      }
+      undo() {
+        for (const data of this.removedData) {
+          this.board.addElement(data.element, data.layerId);
+        }
+      }
+    }
+
+    class MoveElementsCommand extends Command {
+      constructor(elements, dx, dy) {
+        super();
+        this.elements = elements;
+        this.dx = dx;
+        this.dy = dy;
+      }
+      execute() {
+        for (const el of this.elements) {
+          el.x += this.dx;
+          el.y += this.dy;
+          if (el.x2 !== undefined) { el.x2 += this.dx; el.y2 += this.dy; }
+        }
+      }
+      undo() {
+        for (const el of this.elements) {
+          el.x -= this.dx;
+          el.y -= this.dy;
+          if (el.x2 !== undefined) { el.x2 -= this.dx; el.y2 -= this.dy; }
+        }
+      }
+    }
+
+    class ModifyElementCommand extends Command {
+      constructor(element, property, before, after) {
+        super();
+        this.element = element;
+        this.property = property;
+        this.before = before;
+        this.after = after;
+      }
+      execute() { this.element[this.property] = this.after; }
+      undo() { this.element[this.property] = this.before; }
+    }
+
+    class History {
+      constructor() {
+        this.commands = [];
+        this.cursor = 0;
+      }
+      
+      execute(command) {
+        command.execute();
+        this.commands.length = this.cursor; // trim future
+        this.commands.push(command);
+        if (this.commands.length > 100) {
+          this.commands.shift();
+        } else {
+          this.cursor++;
+        }
+        if (window.whiteboardEngine) window.whiteboardEngine.markDirty();
+      }
+      
+      undo() {
+        if (this.cursor > 0) {
+          this.cursor--;
+          this.commands[this.cursor].undo();
+          if (window.whiteboardEngine) window.whiteboardEngine.markDirty();
+        }
+      }
+      
+      redo() {
+        if (this.cursor < this.commands.length) {
+          this.commands[this.cursor].execute();
+          this.cursor++;
+          if (window.whiteboardEngine) window.whiteboardEngine.markDirty();
+        }
+      }
+    }
+
+    class BaseTool {
+      constructor(engine) { this.engine = engine; }
+      activate() {}
+      deactivate() {}
+      onPointerDown(e, pt) {}
+      onPointerMove(e, pt) {}
+      onPointerUp(e, pt) {}
+      onRender(ctx) {}
+    }
+
+    class HandTool extends BaseTool {
+      // Logic handled globally in CanvasEngine pan section
+    }
+
+    class BaseShapeTool extends BaseTool {
+      constructor(engine, ElementClass) {
+        super(engine);
+        this.ElementClass = ElementClass;
+        this.isDrawing = false;
+        this.startPt = null;
+        this.previewElement = null;
+      }
+      onPointerDown(e, pt) {
+        if (e.button !== 0) return;
+        this.isDrawing = true;
+        this.startPt = pt;
+        this.previewElement = new this.ElementClass();
+        this.previewElement.x = pt.x;
+        this.previewElement.y = pt.y;
+        this.previewElement.width = 0;
+        this.previewElement.height = 0;
+        if (this.previewElement.x2 !== undefined) {
+          this.previewElement.x2 = pt.x;
+          this.previewElement.y2 = pt.y;
+        }
+        if (this.engine.globalStyle) {
+           Object.assign(this.previewElement, this.engine.globalStyle);
+        }
+        this.engine.markDirty();
+      }
+      onPointerMove(e, pt) {
+        if (!this.isDrawing || !this.previewElement) return;
+        if (e.shiftKey) {
+          const dx = pt.x - this.startPt.x;
+          const dy = pt.y - this.startPt.y;
+          const size = Math.max(Math.abs(dx), Math.abs(dy));
+          this.previewElement.width = size * Math.sign(dx);
+          this.previewElement.height = size * Math.sign(dy);
+          // For lines
+          if (this.previewElement.x2 !== undefined) {
+            // Constrain to 45 deg
+            if (Math.abs(dx) > Math.abs(dy) * 2) {
+              this.previewElement.x2 = pt.x; this.previewElement.y2 = this.startPt.y;
+            } else if (Math.abs(dy) > Math.abs(dx) * 2) {
+              this.previewElement.x2 = this.startPt.x; this.previewElement.y2 = pt.y;
+            } else {
+              this.previewElement.x2 = this.startPt.x + size * Math.sign(dx);
+              this.previewElement.y2 = this.startPt.y + size * Math.sign(dy);
+            }
+          }
+        } else {
+          this.previewElement.width = pt.x - this.startPt.x;
+          this.previewElement.height = pt.y - this.startPt.y;
+          if (this.previewElement.x2 !== undefined) {
+            this.previewElement.x2 = pt.x;
+            this.previewElement.y2 = pt.y;
+          }
+        }
+        
+        // Normalize rect/ellipse width/height
+        if (this.previewElement.width < 0 && this.previewElement.x2 === undefined) {
+          this.previewElement.x = this.startPt.x + this.previewElement.width;
+          this.previewElement.width = Math.abs(this.previewElement.width);
+        }
+        if (this.previewElement.height < 0 && this.previewElement.x2 === undefined) {
+          this.previewElement.y = this.startPt.y + this.previewElement.height;
+          this.previewElement.height = Math.abs(this.previewElement.height);
+        }
+        
+        this.engine.markDirty();
+      }
+      onPointerUp(e, pt) {
+        if (!this.isDrawing || !this.previewElement) return;
+        this.isDrawing = false;
+        if (this.previewElement.width !== 0 || this.previewElement.height !== 0 || (this.previewElement.x2 !== undefined && (this.previewElement.x !== this.previewElement.x2 || this.previewElement.y !== this.previewElement.y2))) {
+          this.engine.history.execute(new AddElementCommand(this.engine.board, this.previewElement));
+        }
+        this.previewElement = null;
+        this.engine.markDirty();
+      }
+      onRender(ctx) {
+        if (this.isDrawing && this.previewElement) {
+          ctx.save();
+          ctx.globalAlpha = 0.5;
+          this.previewElement.render(ctx);
+          ctx.restore();
+        }
+      }
+    }
+
+    class PenTool extends BaseTool {
+      constructor(engine) {
+        super(engine);
+        this.isDrawing = false;
+        this.previewElement = null;
+        this.isHighlighter = false;
+      }
+      onPointerDown(e, pt) {
+        if (e.button !== 0) return;
+        this.isDrawing = true;
+        this.previewElement = new StrokeElement();
+        if (this.engine.globalStyle) {
+           Object.assign(this.previewElement, this.engine.globalStyle);
+        }
+        if (this.isHighlighter) {
+          this.previewElement.opacity = 0.3;
+          this.previewElement.dashStyle = ['highlighter'];
+        }
+        this.previewElement.points.push([pt.x, pt.y, e.pressure || 0.5]);
+        this.engine.markDirty();
+      }
+      onPointerMove(e, pt) {
+        if (!this.isDrawing || !this.previewElement) return;
+        // only push if distance from last point is > 1
+        const last = this.previewElement.points[this.previewElement.points.length - 1];
+        if (Math.hypot(last[0] - pt.x, last[1] - pt.y) > 1) {
+          this.previewElement.points.push([pt.x, pt.y, e.pressure || 0.5]);
+          this.engine.markDirty();
+        }
+      }
+      onPointerUp(e, pt) {
+        if (!this.isDrawing || !this.previewElement) return;
+        this.isDrawing = false;
+        if (this.previewElement.points.length > 1) {
+          // Shape recognition logic could drop in here
+          this.engine.history.execute(new AddElementCommand(this.engine.board, this.previewElement));
+        }
+        this.previewElement = null;
+        this.engine.markDirty();
+      }
+      onRender(ctx) {
+        if (this.isDrawing && this.previewElement) {
+          ctx.save();
+          if (this.isHighlighter) ctx.globalCompositeOperation = 'multiply';
+          this.previewElement.render(ctx);
+          ctx.restore();
+        }
+      }
+    }
+
+    class EraserTool extends BaseTool {
+      constructor(engine) {
+        super(engine);
+        this.isErasing = false;
+        this.erasedInStroke = new Set();
+      }
+      onPointerDown(e, pt) {
+        if (e.button !== 0) return;
+        this.isErasing = true;
+        this.erasedInStroke.clear();
+        this.eraseAtPoint(pt);
+      }
+      onPointerMove(e, pt) {
+        if (!this.isErasing) return;
+        this.eraseAtPoint(pt);
+      }
+      onPointerUp(e, pt) {
+        this.isErasing = false;
+        this.erasedInStroke.clear();
+      }
+      eraseAtPoint(pt) {
+        const elements = this.engine.board.getAllElements();
+        const hitRadius = 10 / this.engine.viewport.zoom;
+        let removed = [];
+        for (const el of elements) {
+          if (this.erasedInStroke.has(el.id)) continue;
+          const bb = el.getBoundingBox();
+          if (pt.x >= bb.x - hitRadius && pt.x <= bb.x + bb.width + hitRadius &&
+              pt.y >= bb.y - hitRadius && pt.y <= bb.y + bb.height + hitRadius) {
+            removed.push(el);
+            this.erasedInStroke.add(el.id);
+          }
+        }
+        if (removed.length > 0) {
+          this.engine.history.execute(new RemoveElementsCommand(this.engine.board, removed));
+          this.engine.markDirty();
+        }
+      }
+      onRender(ctx) {}
+    }
+
+    class RectTool extends BaseShapeTool { constructor(e) { super(e, RectElement); } }
+    class EllipseTool extends BaseShapeTool { constructor(e) { super(e, EllipseElement); } }
+    class LineTool extends BaseShapeTool { constructor(e) { super(e, LineElement); } }
+    class ArrowTool extends BaseShapeTool { constructor(e) { super(e, ArrowElement); } }
+    class FrameTool extends BaseShapeTool { constructor(e) { super(e, FrameElement); } }
+
+    class TextTool extends BaseTool {
+      onPointerDown(e, pt) {
+        if (e.button !== 0) return;
+        const txt = new TextElement();
+        if (this.engine.globalStyle) Object.assign(txt, this.engine.globalStyle);
+        this.engine.spawnTextEditor(e.clientX, e.clientY, pt, txt, false, true);
+      }
+    }
+    class StickyTool extends BaseTool {
+      onPointerDown(e, pt) {
+        if (e.button !== 0) return;
+        const sticky = new StickyElement();
+        sticky.x = pt.x; sticky.y = pt.y;
+        sticky.width = 200; sticky.height = 200;
+        const colors = ['#fef3c7', '#dcfce7', '#e0e7ff', '#fce7f3', '#fee2e2', '#f3f4f6'];
+        sticky.noteColor = colors[Math.floor(Math.random() * colors.length)];
+        this.engine.history.execute(new AddElementCommand(this.engine.board, sticky));
+        
+        // Spawn text editor centered
+        const centerScreen = this.engine.worldToScreen(pt.x + 100, pt.y + 100);
+        this.engine.spawnTextEditor(centerScreen.x, centerScreen.y, pt, sticky, true, false);
+        this.engine.toolManager.setTool('select');
+      }
+    }
+    class ImageTool extends BaseTool {
+      activate() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e) => {
+          if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              const imgEl = new ImageElement();
+              imgEl.loadImage(ev.target.result);
+              imgEl.img.onload = () => {
+                imgEl.width = imgEl.img.width;
+                imgEl.height = imgEl.img.height;
+                // Place at viewport center
+                const cx = (window.innerWidth / 2) / this.engine.dpr;
+                const cy = (window.innerHeight / 2) / this.engine.dpr;
+                const pt = this.engine.screenToWorld(cx, cy);
+                imgEl.x = pt.x - imgEl.width / 2;
+                imgEl.y = pt.y - imgEl.height / 2;
+                this.engine.history.execute(new AddElementCommand(this.engine.board, imgEl));
+              };
+            };
+            reader.readAsDataURL(e.target.files[0]);
+          }
+          this.engine.toolManager.setTool('select');
+        };
+        input.click();
+      }
+    }
+
+    class ToolManager {
+      constructor() {
+        this.currentTool = 'hand';
+        this.tools = {};
+      }
+      registerTool(name, toolObject) {
+        this.tools[name] = toolObject;
+      }
+      setTool(name) {
+        if (this.tools[this.currentTool] && this.tools[this.currentTool].deactivate) {
+          this.tools[this.currentTool].deactivate();
+        }
+        this.currentTool = name;
+        if (this.tools[this.currentTool] && this.tools[this.currentTool].activate) {
+          this.tools[this.currentTool].activate();
+        }
+      }
+      getActiveTool() {
+        return this.tools[this.currentTool];
+      }
+    }
+
+    class CanvasEngine {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.dpr = window.devicePixelRatio || 1;
+        this.viewport = { x: 0, y: 0, zoom: 1 };
+        
+        this.board = new Board();
+        this.history = new History();
+        this.toolManager = new ToolManager();
+        this.gridRenderer = new GridRenderer(this);
+        
+        // Settings
+        this.settings = { snapToGrid: false, snapToObjects: false };
+        this.snapLines = []; // visual representation of snaps
+        
+        this.globalStyle = {
+           strokeColor: '#6366f1',
+           fillColor: 'transparent',
+           strokeWidth: 2,
+           dashStyle: [],
+           opacity: 1,
+           fontFamily: 'Inter',
+           fontSize: 24,
+           fontWeight: 400,
+           fontStyle: 'normal'
+        };
+
+        this.isSpaceHeld = false;
+        
+        this.isPanDragging = false;
+        this.lastPanPoint = null;
+        
+        this.toolManager.registerTool('hand', new HandTool(this));
+        
+        class SelectTool extends BaseTool {
+          constructor(engine) {
+            super(engine);
+            this.selection = [];
+            this.mode = 'idle'; // idle, move, resize, rotate, lasso
+            this.startPt = null;
+            this.activeHandle = null;
+            this.lassoRect = null;
+            this.initialPos = new Map();
+          }
+          onPointerDown(e, pt) {
+            if (e.button !== 0) return;
+            this.startPt = pt;
+            
+            // 1. Check handles (resize/rotate) if selection exists
+            if (this.selection.length === 1) {
+              const el = this.selection[0];
+              const bb = el.getBoundingBox();
+              const handles = this.getHandles(bb);
+              
+              let hitPt = pt;
+              if (el.rotation) {
+                const cx = bb.x + bb.width/2;
+                const cy = bb.y + bb.height/2;
+                const dx = pt.x - cx;
+                const dy = pt.y - cy;
+                hitPt = {
+                  x: cx + dx * Math.cos(-el.rotation) - dy * Math.sin(-el.rotation),
+                  y: cy + dx * Math.sin(-el.rotation) + dy * Math.cos(-el.rotation)
+                };
+              }
+
+              for (const [key, h] of Object.entries(handles)) {
+                if (Math.hypot(h.x - hitPt.x, h.y - hitPt.y) < 10 / this.engine.viewport.zoom) {
+                  this.mode = key === 'rotate' ? 'rotate' : 'resize';
+                  this.activeHandle = key;
+                  this.initialPos.set(el, { ...el });
+                  return;
+                }
+              }
+            }
+
+            // 2. Check hit test on elements
+            const elements = this.engine.board.getAllElements();
+            let hit = null;
+            // Iterate backwards for z-index
+            for (let i = elements.length - 1; i >= 0; i--) {
+              if (elements[i].containsPoint(pt.x, pt.y)) {
+                hit = elements[i];
+                break;
+              }
+            }
+            
+            if (hit) {
+              if (hit.type === 'rect' || hit.type === 'ellipse' || hit.type === 'sticky' || hit.type === 'text') {
+                if (e.detail === 2) {
+                  // Double click text editing
+                  const bb = hit.getBoundingBox();
+                  const centerScreen = this.engine.worldToScreen(bb.x + bb.width/2, bb.y + bb.height/2);
+                  const tlScreen = this.engine.worldToScreen(bb.x, bb.y);
+                  
+                  // Text elements align differently based on text align 
+                  let sx = tlScreen.x;
+                  if (hit.type === 'text') {
+                    if (hit.textAlign === 'center') sx = centerScreen.x;
+                    else if (hit.textAlign === 'right') sx = this.engine.worldToScreen(bb.x + bb.width, bb.y).x;
+                  } else {
+                    sx = centerScreen.x;
+                  }
+                  
+                  const sy = hit.type === 'text' ? tlScreen.y : centerScreen.y;
+                  this.engine.spawnTextEditor(sx, sy, pt, hit, hit.type === 'sticky', false);
+                  return;
+                }
+              }
+            
+              if (e.shiftKey) {
+                const idx = this.selection.indexOf(hit);
+                if (idx > -1) this.selection.splice(idx, 1);
+                else this.selection.push(hit);
+              } else {
+                if (!this.selection.includes(hit)) {
+                  this.selection = [hit];
+                }
+              }
+              this.mode = 'move';
+              this.initialPos.clear();
+              for (const el of this.selection) {
+                this.initialPos.set(el, { x: el.x, y: el.y, x2: el.x2, y2: el.y2, width: el.width, height: el.height });
+              }
+            } else {
+              if (!e.shiftKey) this.selection = [];
+              this.mode = 'lasso';
+              this.lassoRect = { x: pt.x, y: pt.y, width: 0, height: 0 };
+            }
+            this.engine.markDirty();
+          }
+          onPointerMove(e, pt) {
+            if (this.mode === 'idle') {
+              let cursor = '';
+              if (this.selection.length === 1) {
+                const el = this.selection[0];
+                const bb = el.getBoundingBox();
+                const handles = this.getHandles(bb);
+                
+                let hitPt = pt;
+                if (el.rotation) {
+                  const cx = bb.x + bb.width/2;
+                  const cy = bb.y + bb.height/2;
+                  const dx = pt.x - cx;
+                  const dy = pt.y - cy;
+                  hitPt = {
+                    x: cx + dx * Math.cos(-el.rotation) - dy * Math.sin(-el.rotation),
+                    y: cy + dx * Math.sin(-el.rotation) + dy * Math.cos(-el.rotation)
+                  };
+                }
+
+                for (const [key, h] of Object.entries(handles)) {
+                  if (Math.hypot(h.x - hitPt.x, h.y - hitPt.y) < 10 / this.engine.viewport.zoom) {
+                    if (key === 'rotate') cursor = 'alias';
+                    else if (key === 'nw' || key === 'se') cursor = 'nwse-resize';
+                    else if (key === 'ne' || key === 'sw') cursor = 'nesw-resize';
+                    else if (key === 'n' || key === 's') cursor = 'ns-resize';
+                    else if (key === 'e' || key === 'w') cursor = 'ew-resize';
+                    break;
+                  }
+                }
+              }
+              
+              if (!cursor) {
+                const elements = this.engine.board.getAllElements();
+                for (let i = elements.length - 1; i >= 0; i--) {
+                  if (elements[i].containsPoint(pt.x, pt.y)) {
+                    cursor = 'move';
+                    if (elements[i].type === 'text' || elements[i].type === 'sticky') {
+                      cursor = 'text';
+                    }
+                    break;
+                  }
+                }
+              }
+              this.engine.canvas.style.cursor = cursor || 'default';
+            } else if (this.mode === 'move') {
+              const dx = pt.x - this.startPt.x;
+              const dy = pt.y - this.startPt.y;
+              for (const el of this.selection) {
+                const init = this.initialPos.get(el);
+                if (init) {
+                  el.x = init.x + dx;
+                  el.y = init.y + dy;
+                  if (el.x2 !== undefined) { el.x2 = init.x2 + dx; el.y2 = init.y2 + dy; }
+                }
+              }
+              this.engine.markDirty();
+            } else if (this.mode === 'lasso') {
+              this.lassoRect.width = pt.x - this.startPt.x;
+              this.lassoRect.height = pt.y - this.startPt.y;
+              this.engine.markDirty();
+            } else if (this.mode === 'resize') {
+              // Simplified resize logic for single selection
+              const el = this.selection[0];
+              const init = this.initialPos.get(el);
+              
+              const cx = init.x + init.width/2;
+              const cy = init.y + init.height/2;
+              
+              const unrotate = (p) => {
+                if (!init.rotation) return p;
+                const dx = p.x - cx;
+                const dy = p.y - cy;
+                return {
+                  x: cx + dx * Math.cos(-init.rotation) - dy * Math.sin(-init.rotation),
+                  y: cy + dx * Math.sin(-init.rotation) + dy * Math.cos(-init.rotation)
+                };
+              };
+              
+              const localPt = unrotate(pt);
+              const localStart = unrotate(this.startPt);
+              
+              const dx = localPt.x - localStart.x;
+              const dy = localPt.y - localStart.y;
+              
+              let newW = init.width;
+              let newH = init.height;
+              let localDx = 0;
+              let localDy = 0;
+              
+              if (this.activeHandle.includes('e')) newW = Math.max(1, init.width + dx);
+              if (this.activeHandle.includes('w')) { newW = Math.max(1, init.width - dx); localDx = init.width - newW; }
+              if (this.activeHandle.includes('s')) newH = Math.max(1, init.height + dy);
+              if (this.activeHandle.includes('n')) { newH = Math.max(1, init.height - dy); localDy = init.height - newH; }
+
+              if (el.type === 'text') {
+                 let scale = 1;
+                 if (this.activeHandle.length === 2) {
+                    scale = Math.max(newW / init.width, newH / init.height);
+                 } else if (this.activeHandle === 'e' || this.activeHandle === 'w') {
+                    scale = newW / init.width;
+                 } else {
+                    scale = newH / init.height;
+                 }
+                 el.fontSize = Math.max(4, Math.round(init.fontSize * scale));
+                 newW = init.width * (el.fontSize / init.fontSize);
+                 newH = init.height * (el.fontSize / init.fontSize);
+                 localDx = 0; localDy = 0;
+                 if (this.activeHandle.includes('w')) localDx = init.width - newW;
+                 if (this.activeHandle.includes('n')) localDy = init.height - newH;
+              }
+
+              el.width = newW;
+              el.height = newH;
+              
+              const newLocalCx = init.x + localDx + newW/2;
+              const newLocalCy = init.y + localDy + newH/2;
+              const oldLocalCx = init.x + init.width/2;
+              const oldLocalCy = init.y + init.height/2;
+
+              const dcx = newLocalCx - oldLocalCx;
+              const dcy = newLocalCy - oldLocalCy;
+
+              const globalDcx = dcx * Math.cos(init.rotation || 0) - dcy * Math.sin(init.rotation || 0);
+              const globalDcy = dcx * Math.sin(init.rotation || 0) + dcy * Math.cos(init.rotation || 0);
+
+              el.x = (oldLocalCx + globalDcx) - newW/2;
+              el.y = (oldLocalCy + globalDcy) - newH/2;
+              this.engine.markDirty();
+            } else if (this.mode === 'rotate') {
+              const el = this.selection[0];
+              const init = this.initialPos.get(el);
+              const cx = init.x + init.width / 2;
+              const cy = init.y + init.height / 2;
+              el.rotation = Math.atan2(pt.y - cy, pt.x - cx) + Math.PI / 2;
+              if (e.shiftKey) el.rotation = Math.round(el.rotation / (Math.PI / 12)) * (Math.PI / 12);
+              this.engine.markDirty();
+            }
+          }
+          onPointerUp(e, pt) {
+            if (this.mode === 'move') {
+              const dx = pt.x - this.startPt.x;
+              const dy = pt.y - this.startPt.y;
+              if (dx !== 0 || dy !== 0) {
+                // To support undo properly, we should revert, then apply Command.
+                for (const el of this.selection) {
+                  const init = this.initialPos.get(el);
+                  if (init) {
+                    el.x = init.x; el.y = init.y;
+                    if (el.x2 !== undefined) { el.x2 = init.x2; el.y2 = init.y2; }
+                  }
+                }
+                this.engine.history.execute(new MoveElementsCommand(this.selection, dx, dy));
+              }
+            } else if (this.mode === 'lasso') {
+              // Collect all intersecting elements
+              const elements = this.engine.board.getAllElements();
+              const rx = Math.min(this.lassoRect.x, this.lassoRect.x + this.lassoRect.width);
+              const ry = Math.min(this.lassoRect.y, this.lassoRect.y + this.lassoRect.height);
+              const rw = Math.abs(this.lassoRect.width);
+              const rh = Math.abs(this.lassoRect.height);
+              
+              for (const el of elements) {
+                const bb = el.getBoundingBox();
+                if (bb.x < rx + rw && bb.x + bb.width > rx && bb.y < ry + rh && bb.y + bb.height > ry) {
+                  if (!this.selection.includes(el)) this.selection.push(el);
+                }
+              }
+            } else if (this.mode === 'resize' || this.mode === 'rotate') {
+              const el = this.selection[0];
+              const init = this.initialPos.get(el);
+               if (el && init) {
+                 const endState = { x: el.x, y: el.y, width: el.width, height: el.height, rotation: el.rotation, fontSize: el.fontSize };
+                 el.x = init.x; el.y = init.y; el.width = init.width; el.height = init.height; el.rotation = init.rotation;
+                 if (el.type === 'text') el.fontSize = init.fontSize;
+                 this.engine.history.execute({
+                    execute: () => { el.x = endState.x; el.y = endState.y; el.width = endState.width; el.height = endState.height; el.rotation = endState.rotation; if (el.type === 'text') el.fontSize = endState.fontSize; },
+                    undo: () => { el.x = init.x; el.y = init.y; el.width = init.width; el.height = init.height; el.rotation = init.rotation; if (el.type === 'text') el.fontSize = init.fontSize; }
+                 });
+                 this.engine.markDirty();
+              }
+            }
+            this.mode = 'idle';
+            this.engine.canvas.style.cursor = 'default';
+            this.lassoRect = null;
+            this.engine.markDirty();
+          }
+          getHandles(bb) {
+            return {
+              nw: { x: bb.x, y: bb.y },
+              n: { x: bb.x + bb.width/2, y: bb.y },
+              ne: { x: bb.x + bb.width, y: bb.y },
+              e: { x: bb.x + bb.width, y: bb.y + bb.height/2 },
+              se: { x: bb.x + bb.width, y: bb.y + bb.height },
+              s: { x: bb.x + bb.width/2, y: bb.y + bb.height },
+              sw: { x: bb.x, y: bb.y + bb.height },
+              w: { x: bb.x, y: bb.y + bb.height/2 },
+              rotate: { x: bb.x + bb.width/2, y: bb.y - 28/this.engine.viewport.zoom }
+            };
+          }
+          onRender(ctx) {
+            const zoom = this.engine.viewport.zoom;
+            
+            // Draw Lasso
+            if (this.mode === 'lasso' && this.lassoRect) {
+              ctx.save();
+              ctx.setTransform(zoom * this.engine.dpr, 0, 0, zoom * this.engine.dpr, this.engine.viewport.x * this.engine.dpr, this.engine.viewport.y * this.engine.dpr);
+              ctx.lineWidth = 1 / zoom;
+              ctx.strokeStyle = '#6366f1';
+              ctx.fillStyle = 'rgba(99, 102, 241, 0.1)';
+              ctx.setLineDash([5 / zoom, 5 / zoom]);
+              ctx.fillRect(this.lassoRect.x, this.lassoRect.y, this.lassoRect.width, this.lassoRect.height);
+              ctx.strokeRect(this.lassoRect.x, this.lassoRect.y, this.lassoRect.width, this.lassoRect.height);
+              ctx.restore();
+            }
+            
+            // Draw Selection Boxes
+            if (this.selection.length > 0) {
+              ctx.save();
+              ctx.setTransform(zoom * this.engine.dpr, 0, 0, zoom * this.engine.dpr, this.engine.viewport.x * this.engine.dpr, this.engine.viewport.y * this.engine.dpr);
+              ctx.lineWidth = 1.5 / zoom;
+              ctx.strokeStyle = '#6366f1';
+              
+              if (this.selection.length === 1) {
+                const el = this.selection[0];
+                const bb = el.getBoundingBox();
+                
+                // Rotated drawing requires saving context per element rotation
+                ctx.save();
+                ctx.translate(bb.x + bb.width/2, bb.y + bb.height/2);
+                ctx.rotate(el.rotation);
+                ctx.translate(-(bb.x + bb.width/2), -(bb.y + bb.height/2));
+                
+                ctx.strokeRect(bb.x - 2/zoom, bb.y - 2/zoom, bb.width + 4/zoom, bb.height + 4/zoom);
+                
+                // Draw Handles
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                const handles = this.getHandles(bb);
+                const hs = 8 / zoom;
+                for (const [key, h] of Object.entries(handles)) {
+                  if (key === 'rotate') {
+                    ctx.beginPath();
+                    ctx.arc(h.x, h.y, hs, 0, Math.PI*2);
+                    ctx.fill(); ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(h.x, bb.y);
+                    ctx.lineTo(h.x, h.y + hs);
+                    ctx.stroke();
+                  } else {
+                    ctx.fillRect(h.x - hs/2, h.y - hs/2, hs, hs);
+                    ctx.strokeRect(h.x - hs/2, h.y - hs/2, hs, hs);
+                  }
+                }
+                ctx.restore();
+              } else {
+                // Multi-select bounding box
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                for (const el of this.selection) {
+                  const bb = el.getBoundingBox();
+                  if (bb.x < minX) minX = bb.x;
+                  if (bb.y < minY) minY = bb.y;
+                  if (bb.x + bb.width > maxX) maxX = bb.x + bb.width;
+                  if (bb.y + bb.height > maxY) maxY = bb.y + bb.height;
+                }
+                ctx.strokeRect(minX - 4/zoom, minY - 4/zoom, maxX - minX + 8/zoom, maxY - minY + 8/zoom);
+              }
+              ctx.restore();
+            }
+          }
+        }
+        
+        this.toolManager.registerTool('select', new SelectTool(this));
+        this.toolManager.registerTool('pen', new PenTool(this));
+        
+        const highlighter = new PenTool(this);
+        highlighter.isHighlighter = true;
+        this.toolManager.registerTool('highlighter', highlighter);
+        
+        this.toolManager.registerTool('eraser', new EraserTool(this));
+        this.toolManager.registerTool('rect', new RectTool(this));
+        this.toolManager.registerTool('ellipse', new EllipseTool(this));
+        this.toolManager.registerTool('line', new LineTool(this));
+        this.toolManager.registerTool('arrow', new ArrowTool(this));
+        this.toolManager.registerTool('text', new TextTool(this));
+        this.toolManager.registerTool('sticky', new StickyTool(this));
+        this.toolManager.registerTool('image', new ImageTool(this));
+        this.toolManager.registerTool('frame', new FrameTool(this));
+        
+        this.toolManager.setTool('select');
+        
+        this.isDirty = true;
+        
+        this.setupEvents();
+        this.initUI();
+        window.addEventListener('resize', () => this.resize());
+        this.resize();
+        
+        this.render = this.render.bind(this);
+        requestAnimationFrame(this.render);
+      }
+      
+      setupEvents() {
+        window.addEventListener('keydown', e => {
+          if (e.code === 'Space') this.isSpaceHeld = true;
+        });
+        window.addEventListener('keyup', e => {
+          if (e.code === 'Space') {
+            this.isSpaceHeld = false;
+            this.isPanDragging = false;
+            this.lastPanPoint = null;
+          }
+        });
+
+        this.canvas.addEventListener('wheel', e => {
+          e.preventDefault();
+          if (e.ctrlKey || e.metaKey || true) { // Always zoom on scroll for infinite canvas, though usually without ctrl it pans. Let's make it zoom always as per requirements
+            const scaleAmount = Math.exp(-e.deltaY * 0.001);
+            const newZoom = clamp(this.viewport.zoom * scaleAmount, 0.02, 40);
+            const factor = newZoom / this.viewport.zoom;
+            
+            // Anchor to cursor
+            const pt = this.screenToWorld(e.clientX, e.clientY);
+            this.viewport.zoom = newZoom;
+            this.viewport.x = (e.clientX / this.dpr) - pt.x * this.viewport.zoom;
+            this.viewport.y = (e.clientY / this.dpr) - pt.y * this.viewport.zoom;
+            
+            this.markDirty();
+          }
+        }, { passive: false });
+
+        this.canvas.addEventListener('pointerdown', e => {
+          this.canvas.setPointerCapture(e.pointerId);
+          if (e.button === 1 || this.isSpaceHeld || this.toolManager.currentTool === 'hand') {
+            this.isPanDragging = true;
+            this.lastPanPoint = { x: e.clientX, y: e.clientY };
+            return;
+          }
+          const pt = this.screenToWorld(e.clientX, e.clientY);
+          const tool = this.toolManager.getActiveTool();
+          if (tool && tool.onPointerDown) {
+            tool.onPointerDown(e, pt);
+          }
+        });
+
+        this.canvas.addEventListener('pointermove', e => {
+          if (this.isPanDragging) {
+            const dx = e.clientX - this.lastPanPoint.x;
+            const dy = e.clientY - this.lastPanPoint.y;
+            this.viewport.x += dx / this.dpr;
+            this.viewport.y += dy / this.dpr;
+            this.lastPanPoint = { x: e.clientX, y: e.clientY };
+            this.markDirty();
+            return;
+          }
+          
+          let pt = this.screenToWorld(e.clientX, e.clientY);
+          
+          // Snap logic before passing to tools
+          this.snapLines = [];
+          if (this.settings.snapToGrid && this.gridRenderer.mode !== 'none') {
+             pt.x = Math.round(pt.x / this.gridRenderer.size) * this.gridRenderer.size;
+             pt.y = Math.round(pt.y / this.gridRenderer.size) * this.gridRenderer.size;
+          }
+          if (this.settings.snapToObjects && !this.isPanDragging) {
+             const threshold = 8 / this.viewport.zoom;
+             let snappedX = false;
+             let snappedY = false;
+             
+             // Very basic snap detection against all element centers and edges
+             const elements = this.board.getAllElements();
+             // Optimization: skip currently moving element in SelectTool - but we don't have direct access here easily. 
+             // We'll just snap to everything.
+             for (const el of elements) {
+               const bb = el.getBoundingBox();
+               const pts = [bb.x, bb.x + bb.width/2, bb.x + bb.width];
+               for (const x of pts) {
+                 if (!snappedX && Math.abs(pt.x - x) < threshold) {
+                   pt.x = x; snappedX = true;
+                   this.snapLines.push({x1:x, y1:-10000, x2:x, y2:10000}); // vertical guide
+                 }
+               }
+               const yts = [bb.y, bb.y + bb.height/2, bb.y + bb.height];
+               for (const y of yts) {
+                 if (!snappedY && Math.abs(pt.y - y) < threshold) {
+                   pt.y = y; snappedY = true;
+                   this.snapLines.push({x1:-10000, y1:y, x2:10000, y2:y}); // horizontal guide
+                 }
+               }
+             }
+          }
+
+          const tool = this.toolManager.getActiveTool();
+          if (tool && tool.onPointerMove) {
+            tool.onPointerMove(e, pt);
+          }
+        });
+        
+        // Context Menu
+        this.canvas.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          const menu = document.getElementById('context-menu');
+          menu.style.display = 'block';
+          menu.style.left = `${e.clientX}px`;
+          menu.style.top = `${e.clientY}px`;
+          
+          const closeMenu = () => {
+             menu.style.display = 'none';
+             document.removeEventListener('pointerdown', closeMenu);
+          };
+          // small timeout to avoid immediate close
+          setTimeout(() => document.addEventListener('pointerdown', closeMenu), 10);
+        });
+        
+        // Shortcut keys
+        this.clipboard = [];
+        window.addEventListener('keydown', (e) => {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          
+          if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            if (e.shiftKey) this.history.redo();
+            else this.history.undo();
+            this.markDirty();
+            e.preventDefault();
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+            const sel = this.toolManager.getActiveTool()?.selection;
+            if (sel?.length > 0) {
+              this.clipboard = sel.map(el => JSON.parse(JSON.stringify(el.toJSON())));
+            }
+          }
+          if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'd')) {
+            let src = e.key === 'd' ? this.toolManager.getActiveTool()?.selection?.map(el => JSON.parse(JSON.stringify(el.toJSON()))) : this.clipboard;
+            if (src && src.length > 0) {
+              const newEls = src.map(data => {
+                const copy = Element.fromJSON(data);
+                copy.id = crypto.randomUUID();
+                copy.x += 20; copy.y += 20;
+                if (copy.x2 !== undefined) { copy.x2 += 20; copy.y2 += 20; }
+                return copy;
+              });
+              // Group command logic (simple loop for now)
+              for (const el of newEls) this.history.execute(new AddElementCommand(this.board, el));
+              
+              // Select the newly pasted elements
+              const selTool = this.toolManager.tools['select'];
+              if (selTool) {
+                this.toolManager.setTool('select');
+                selTool.selection = newEls;
+                selTool.initialPos.clear();
+              }
+              this.markDirty();
+            }
+            e.preventDefault();
+          }
+          if ((e.ctrlKey || e.metaKey) && (e.key === '[' || e.key === ']')) {
+            const sel = this.toolManager.getActiveTool()?.selection;
+            if (sel?.length > 0) {
+               for (const el of sel) {
+                 const layer = this.board.layers.find(l => l.id === el.layerId) || this.board.layers[0];
+                 const idx = layer.elements.indexOf(el);
+                 if (e.key === '[' && idx > 0) {
+                   layer.elements.splice(idx, 1);
+                   layer.elements.splice(idx - 1, 0, el);
+                 } else if (e.key === ']' && idx < layer.elements.length - 1) {
+                   layer.elements.splice(idx, 1);
+                   layer.elements.splice(idx + 1, 0, el);
+                 }
+               }
+               this.markDirty();
+            }
+            e.preventDefault();
+          }
+          if (e.key === 'Delete' || e.key === 'Backspace') {
+            const sel = this.toolManager.getActiveTool()?.selection;
+            if (sel?.length > 0) {
+              this.history.execute(new RemoveElementsCommand(this.board, [...sel]));
+              sel.length = 0;
+              this.toolManager.getActiveTool().mode = 'idle';
+              this.markDirty();
+            }
+          }
+        });
+
+        const endPointer = (e) => {
+          if (this.isPanDragging) {
+            this.isPanDragging = false;
+            this.lastPanPoint = null;
+            return;
+          }
+          
+          this.snapLines = []; // Clear snap lines on up
+          
+          const pt = this.screenToWorld(e.clientX, e.clientY);
+          const tool = this.toolManager.getActiveTool();
+          if (tool && tool.onPointerUp) {
+            tool.onPointerUp(e, pt);
+          }
+        };
+
+        this.canvas.addEventListener('pointerup', endPointer);
+        this.canvas.addEventListener('pointercancel', endPointer);
+      }
+      
+      initUI() {
+        // --- Left Toolbar ---
+        const tools = [
+          { id: 'select', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path><path d="M13 13l6 6"></path></svg>', key: 'V', title: 'Select' },
+          { id: 'hand', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path></svg>', key: 'Space', title: 'Hand' },
+          { divider: true },
+          { id: 'pen', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>', key: 'P', title: 'Pen' },
+          { id: 'highlighter', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path></svg>', key: 'H', title: 'Highlighter' },
+          { id: 'eraser', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16C2.5 15.5 2.5 14.5 3 14L13 4C13.5 3.5 14.5 3.5 15 4L20 9C20.5 9.5 20.5 10.5 20 11L11 20H20V20Z"></path><line x1="16" y1="15" x2="20" y2="11"></line></svg>', key: 'E', title: 'Eraser' },
+          { divider: true },
+          { id: 'rect', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>', key: 'R', title: 'Rectangle' },
+          { id: 'ellipse', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>', key: 'O', title: 'Ellipse' },
+          { id: 'line', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"></line></svg>', key: 'L', title: 'Line' },
+          { id: 'arrow', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"></line><polyline points="12 5 19 5 19 12"></polyline></svg>', key: 'A', title: 'Arrow' },
+          { divider: true },
+          { id: 'text', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>', key: 'T', title: 'Text' },
+          { id: 'sticky', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>', key: 'N', title: 'Sticky Note' },
+          { id: 'image', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>', key: 'I', title: 'Image' },
+          { id: 'frame', icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M3 9h18"></path><path d="M9 21V9"></path></svg>', key: 'F', title: 'Frame' }
+        ];
+        
+        const toolbar = document.getElementById('left-toolbar');
+        this.toolBtns = {};
+        
+        for (const t of tools) {
+          if (t.divider) {
+            const div = document.createElement('div');
+            div.className = 'w-full h-px bg-white/10 my-0.5';
+            toolbar.appendChild(div);
+          } else {
+            const btn = document.createElement('button');
+            btn.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all focus:outline-none relative group';
+            btn.innerHTML = t.icon;
+            btn.onclick = () => {
+              this.toolManager.setTool(t.id);
+              this.updateToolbarUI();
+            };
+            this.toolBtns[t.id] = btn;
+            toolbar.appendChild(btn);
+          }
+        }
+        this.updateToolbarUI();
+        
+        // --- Context Bar & Undo/Redo ---
+        document.getElementById('btn-undo').onclick = () => { this.history.undo(); this.markDirty(); };
+        document.getElementById('btn-redo').onclick = () => { this.history.redo(); this.markDirty(); };
+        document.getElementById('btn-delete').onclick = () => {
+          const sel = this.toolManager.getActiveTool()?.selection;
+          if (sel?.length > 0) {
+            this.history.execute(new RemoveElementsCommand(this.board, [...sel]));
+            sel.length = 0;
+            this.toolManager.getActiveTool().mode = 'idle';
+            this.markDirty();
+          }
+        };
+
+        ['left', 'center', 'right'].forEach(align => {
+           document.getElementById(`btn-align-${align}`).onclick = () => {
+              const selTool = this.toolManager.tools['select'];
+              if (selTool && selTool.selection.length > 0) {
+                 for (const el of selTool.selection) {
+                    if (el.type === 'text' || el.type === 'sticky') {
+                       this.history.execute(new ModifyElementCommand(el, 'textAlign', el.textAlign || 'center', align));
+                    }
+                 }
+                 this.markDirty();
+              }
+           };
+        });
+
+        document.getElementById('btn-group').onclick = () => this.showToast('Grouping feature coming soon in an update!', 'info');
+        document.getElementById('btn-ungroup').onclick = () => this.showToast('Ungrouping feature coming soon in an update!', 'info');
+
+        // --- Status Bar Zoom ---
+        document.getElementById('zoom-out').onclick = () => {
+           this.viewport.zoom = clamp(this.viewport.zoom - 0.1, 0.1, 8);
+           this.updateUI();
+           this.markDirty();
+        };
+        document.getElementById('zoom-in').onclick = () => {
+           this.viewport.zoom = clamp(this.viewport.zoom + 0.1, 0.1, 8);
+           this.updateUI();
+           this.markDirty();
+        };
+
+        // --- Properties Panel ---
+        const strokeColor = document.getElementById('prop-stroke');
+        const strokeColorLabel = strokeColor.parentElement;
+        const swatches = document.querySelectorAll('.color-swatch');
+        
+        const updateStrokeVisual = (color) => {
+           strokeColorLabel.style.backgroundColor = color;
+           strokeColorLabel.style.backgroundImage = 'none';
+        };
+        
+        swatches.forEach(sw => {
+          sw.onclick = () => {
+            strokeColor.value = sw.dataset.color;
+            updateStrokeVisual(strokeColor.value);
+            this.updateSelectedProperties('strokeColor', strokeColor.value);
+          };
+        });
+        const handleStrokeColor = (e) => {
+          strokeColor.value = e.target.value;
+          updateStrokeVisual(e.target.value);
+          this.updateSelectedProperties('strokeColor', e.target.value);
+        };
+        strokeColor.oninput = handleStrokeColor;
+        document.getElementById('prop-stroke-custom').oninput = handleStrokeColor;
+        
+        const fillColor = document.getElementById('prop-fill');
+        const fillColorLabel = fillColor.parentElement;
+        
+        const updateFillVisual = (color) => {
+           if (color === 'transparent') {
+             fillColorLabel.style.backgroundColor = 'transparent';
+             fillColorLabel.style.backgroundImage = 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)';
+           } else {
+             fillColorLabel.style.backgroundColor = color;
+             fillColorLabel.style.backgroundImage = 'none';
+           }
+        };
+
+        const handleFillColor = (e) => {
+          fillColor.value = e.target.value;
+          updateFillVisual(e.target.value);
+          this.updateSelectedProperties('fillColor', e.target.value);
+        };
+        fillColor.oninput = handleFillColor;
+        document.getElementById('prop-fill-custom').oninput = handleFillColor;
+        
+        document.getElementById('prop-fill-clear').onclick = () => {
+          updateFillVisual('transparent');
+          this.updateSelectedProperties('fillColor', 'transparent');
+        };
+        
+        const strokeWidth = document.getElementById('prop-width');
+        strokeWidth.oninput = () => {
+          document.getElementById('prop-width-val').textContent = strokeWidth.value + 'px';
+          this.updateSelectedProperties('strokeWidth', parseInt(strokeWidth.value, 10));
+        };
+        
+        const dashBtns = document.querySelectorAll('.dash-btn');
+        dashBtns.forEach(btn => {
+          btn.onclick = () => {
+            dashBtns.forEach(b => { b.classList.remove('bg-indigo-500/20', 'border-indigo-500', 'text-white'); b.classList.add('border-white/10', 'text-gray-400'); });
+            btn.classList.add('bg-indigo-500/20', 'border-indigo-500', 'text-white');
+            btn.classList.remove('border-white/10', 'text-gray-400');
+            
+            const type = btn.dataset.dash;
+            let style = [];
+            if (type === 'dashed') style = [10, 10];
+            if (type === 'dotted') style = [2, 6];
+            this.updateSelectedProperties('dashStyle', style);
+          };
+        });
+        
+        const opacity = document.getElementById('prop-opacity');
+        opacity.oninput = () => {
+          document.getElementById('prop-opacity-val').textContent = opacity.value + '%';
+          this.updateSelectedProperties('opacity', parseInt(opacity.value, 10) / 100);
+        };
+        
+        // --- Text Properties ---
+        const fontFamily = document.getElementById('prop-font-family');
+        fontFamily.onchange = () => this.updateSelectedProperties('fontFamily', fontFamily.value);
+        
+        const fontSize = document.getElementById('prop-font-size');
+        fontSize.onchange = () => this.updateSelectedProperties('fontSize', parseInt(fontSize.value, 10));
+        
+        const fontBold = document.getElementById('prop-font-bold');
+        fontBold.onclick = () => {
+          const isBold = fontBold.classList.contains('text-white');
+          this.updateSelectedProperties('fontWeight', isBold ? 400 : 700);
+          this.updateUI(); // force UI update immediately
+        };
+        
+        const fontItalic = document.getElementById('prop-font-italic');
+        fontItalic.onclick = () => {
+          const isItalic = fontItalic.classList.contains('text-white');
+          this.updateSelectedProperties('fontStyle', isItalic ? 'normal' : 'italic');
+          this.updateUI(); // force UI update immediately
+        };
+        
+        // --- Settings Modal ---
+        document.getElementById('btn-settings').onclick = () => document.getElementById('settings-modal').style.display = 'flex';
+        document.getElementById('settings-close').onclick = () => document.getElementById('settings-modal').style.display = 'none';
+        
+        document.getElementById('setting-snap-grid').onchange = (e) => this.settings.snapToGrid = e.target.checked;
+        document.getElementById('setting-snap-objects').onchange = (e) => this.settings.snapToObjects = e.target.checked;
+        document.getElementById('setting-grid-mode').onchange = (e) => {
+           this.gridRenderer.mode = e.target.value;
+           this.markDirty();
+        };
+      }
+      
+      updateToolbarUI() {
+        for (const [id, btn] of Object.entries(this.toolBtns)) {
+          if (id === this.toolManager.currentTool) {
+            btn.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-white focus:outline-none relative group border border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.3)] bg-gradient-to-br from-indigo-500/40 to-purple-500/30';
+          } else {
+            btn.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all focus:outline-none relative group';
+          }
+        }
+      }
+      
+      updateSelectedProperties(property, value) {
+        // Find selection from select tool
+        const selTool = this.toolManager.tools['select'];
+        if (selTool && selTool.selection && selTool.selection.length > 0) {
+           for (const el of selTool.selection) {
+             let actualProperty = property;
+             
+             // Property mapping for specific element types
+             if (el.type === 'sticky') {
+                 if (property === 'fillColor') actualProperty = 'noteColor';
+                 // stickies don't typically change stroke color, but we can allow it
+             }
+             if (el.type === 'text') {
+                 // Text uses strokeColor for text color right now, let's keep it if we want
+             }
+             
+             const before = el[actualProperty];
+             const isDiff = Array.isArray(before) && Array.isArray(value) ? JSON.stringify(before) !== JSON.stringify(value) : before !== value;
+             if (isDiff) {
+               this.history.execute(new ModifyElementCommand(el, actualProperty, before, value));
+             }
+           }
+           this.markDirty();
+        } else {
+           // If no selection, apply to future shapes by saving in a global state
+           this.globalStyle = this.globalStyle || {
+             strokeColor: '#6366f1',
+             fillColor: 'transparent',
+             strokeWidth: 2,
+             dashStyle: [],
+             opacity: 1
+           };
+           this.globalStyle[property] = value;
+        }
+      }
+      
+      updateUI() {
+        document.getElementById('zoom-display').textContent = Math.round(this.viewport.zoom * 100) + '%';
+        let count = 0;
+        for (const l of this.board.layers) count += l.elements.length;
+        document.getElementById('element-count').textContent = `Elements: ${count}`;
+        
+        const propSectionText = document.getElementById('prop-section-text');
+        
+        // Update selection properties panel if select tool
+        const selTool = this.toolManager.tools['select'];
+        if (selTool && selTool.selection.length === 1) {
+          const el = selTool.selection[0];
+          
+          if (el.type === 'text') {
+            propSectionText.style.display = 'block';
+            document.getElementById('prop-font-family').value = el.fontFamily || 'Inter';
+            document.getElementById('prop-font-size').value = el.fontSize || 24;
+            
+            const btnBold = document.getElementById('prop-font-bold');
+            if (el.fontWeight === 700) { btnBold.classList.remove('text-gray-400'); btnBold.classList.add('text-white', 'bg-white/10'); }
+            else { btnBold.classList.remove('text-white', 'bg-white/10'); btnBold.classList.add('text-gray-400'); }
+            
+            const btnItalic = document.getElementById('prop-font-italic');
+            if (el.fontStyle === 'italic') { btnItalic.classList.remove('text-gray-400'); btnItalic.classList.add('text-white', 'bg-white/10'); }
+            else { btnItalic.classList.remove('text-white', 'bg-white/10'); btnItalic.classList.add('text-gray-400'); }
+          } else {
+            propSectionText.style.display = 'none';
+          }
+          
+          const strokeInput = document.getElementById('prop-stroke');
+          const strokeVal = (el.strokeColor && el.strokeColor !== 'transparent') ? el.strokeColor : '#ffffff';
+          strokeInput.value = strokeVal;
+          strokeInput.parentElement.style.backgroundColor = strokeVal;
+          strokeInput.parentElement.style.backgroundImage = 'none';
+          
+          const fillInput = document.getElementById('prop-fill');
+          let actualFillColor = el.fillColor;
+          if (el.type === 'sticky') actualFillColor = el.noteColor;
+          
+          if (actualFillColor && actualFillColor !== 'transparent') {
+            fillInput.value = actualFillColor;
+            fillInput.parentElement.style.backgroundColor = actualFillColor;
+            fillInput.parentElement.style.backgroundImage = 'none';
+          } else {
+            fillInput.value = '#000000'; // arbitrary default for input when clear
+            fillInput.parentElement.style.backgroundColor = 'transparent';
+            fillInput.parentElement.style.backgroundImage = 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)';
+          }
+          
+          document.getElementById('prop-width').value = el.strokeWidth || 2;
+          document.getElementById('prop-width-val').textContent = (el.strokeWidth || 2) + 'px';
+          document.getElementById('prop-opacity').value = Math.round((el.opacity || 1) * 100);
+          document.getElementById('prop-opacity-val').textContent = Math.round((el.opacity || 1) * 100) + '%';
+          
+          const dashBtns = document.querySelectorAll('.dash-btn');
+          dashBtns.forEach(b => { b.classList.remove('bg-indigo-500/20', 'border-indigo-500', 'text-white'); b.classList.add('border-white/10', 'text-gray-400'); });
+          let activeDash = 'solid';
+          if (el.dashStyle && el.dashStyle.length > 0) {
+            if (el.dashStyle[0] === 10) activeDash = 'dashed';
+            else if (el.dashStyle[0] === 2) activeDash = 'dotted';
+          }
+          const activeBtn = Array.from(dashBtns).find(b => b.dataset.dash === activeDash);
+          if (activeBtn) {
+            activeBtn.classList.add('bg-indigo-500/20', 'border-indigo-500', 'text-white');
+            activeBtn.classList.remove('border-white/10', 'text-gray-400');
+          }
+        } else if (this.globalStyle) {
+          // Sync UI to global styles when nothing is selected
+          if (this.toolManager.currentTool === 'text') {
+            propSectionText.style.display = 'block';
+          } else {
+            propSectionText.style.display = 'none';
+          }
+          document.getElementById('prop-font-family').value = this.globalStyle.fontFamily || 'Inter';
+          document.getElementById('prop-font-size').value = this.globalStyle.fontSize || 24;
+          const btnBold = document.getElementById('prop-font-bold');
+          if (this.globalStyle.fontWeight === 700) { btnBold.classList.remove('text-gray-400'); btnBold.classList.add('text-white', 'bg-white/10'); }
+          else { btnBold.classList.remove('text-white', 'bg-white/10'); btnBold.classList.add('text-gray-400'); }
+          const btnItalic = document.getElementById('prop-font-italic');
+          if (this.globalStyle.fontStyle === 'italic') { btnItalic.classList.remove('text-gray-400'); btnItalic.classList.add('text-white', 'bg-white/10'); }
+          else { btnItalic.classList.remove('text-white', 'bg-white/10'); btnItalic.classList.add('text-gray-400'); }
+
+          const strokeInput = document.getElementById('prop-stroke');
+          const strokeVal = (this.globalStyle.strokeColor && this.globalStyle.strokeColor !== 'transparent') ? this.globalStyle.strokeColor : '#ffffff';
+          strokeInput.value = strokeVal;
+          strokeInput.parentElement.style.backgroundColor = strokeVal;
+          strokeInput.parentElement.style.backgroundImage = 'none';
+
+          const fillInput = document.getElementById('prop-fill');
+          if (this.globalStyle.fillColor && this.globalStyle.fillColor !== 'transparent') {
+            fillInput.value = this.globalStyle.fillColor;
+            fillInput.parentElement.style.backgroundColor = this.globalStyle.fillColor;
+            fillInput.parentElement.style.backgroundImage = 'none';
+          } else {
+            fillInput.value = '#000000';
+            fillInput.parentElement.style.backgroundColor = 'transparent';
+            fillInput.parentElement.style.backgroundImage = 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)';
+          }
+
+          document.getElementById('prop-width').value = this.globalStyle.strokeWidth || 2;
+          document.getElementById('prop-width-val').textContent = (this.globalStyle.strokeWidth || 2) + 'px';
+          document.getElementById('prop-opacity').value = Math.round((this.globalStyle.opacity || 1) * 100);
+          document.getElementById('prop-opacity-val').textContent = Math.round((this.globalStyle.opacity || 1) * 100) + '%';
+          
+          const dashBtns = document.querySelectorAll('.dash-btn');
+          dashBtns.forEach(b => { b.classList.remove('bg-indigo-500/20', 'border-indigo-500', 'text-white'); b.classList.add('border-white/10', 'text-gray-400'); });
+          let activeDash = 'solid';
+          if (this.globalStyle.dashStyle && this.globalStyle.dashStyle.length > 0) {
+            if (this.globalStyle.dashStyle[0] === 10) activeDash = 'dashed';
+            else if (this.globalStyle.dashStyle[0] === 2) activeDash = 'dotted';
+          }
+          const activeBtn = Array.from(dashBtns).find(b => b.dataset.dash === activeDash);
+          if (activeBtn) {
+            activeBtn.classList.add('bg-indigo-500/20', 'border-indigo-500', 'text-white');
+            activeBtn.classList.remove('border-white/10', 'text-gray-400');
+          }
+        }
+        
+        this.updateMinimap();
+        this.updateLayersUI();
+        this.updateFramesUI();
+      }
+      
+      updateMinimap() {
+        const mm = document.getElementById('minimap-canvas');
+        const ctx = mm.getContext('2d');
+        ctx.clearRect(0, 0, mm.width, mm.height);
+        
+        const elements = this.board.getAllElements();
+        if (elements.length === 0) return;
+        
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const el of elements) {
+          const bb = el.getBoundingBox();
+          if (bb.x < minX) minX = bb.x;
+          if (bb.y < minY) minY = bb.y;
+          if (bb.x + bb.width > maxX) maxX = bb.x + bb.width;
+          if (bb.y + bb.height > maxY) maxY = bb.y + bb.height;
+        }
+        
+        const pad = 100;
+        minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+        const w = maxX - minX; const h = maxY - minY;
+        const scale = Math.min(mm.width / w, mm.height / h);
+        
+        ctx.save();
+        ctx.translate(mm.width/2 - (minX + w/2)*scale, mm.height/2 - (minY + h/2)*scale);
+        ctx.scale(scale, scale);
+        
+        // Draw elements simple boxes
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 1/scale;
+        for (const el of elements) {
+          const bb = el.getBoundingBox();
+          ctx.fillRect(bb.x, bb.y, bb.width, bb.height);
+          ctx.strokeRect(bb.x, bb.y, bb.width, bb.height);
+        }
+        
+        // Draw viewport
+        const vw = (this.canvas.width / this.dpr) / this.viewport.zoom;
+        const vh = (this.canvas.height / this.dpr) / this.viewport.zoom;
+        const vx = -this.viewport.x / this.viewport.zoom;
+        const vy = -this.viewport.y / this.viewport.zoom;
+        
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 2/scale;
+        ctx.strokeRect(vx, vy, vw, vh);
+        
+        ctx.restore();
+      }
+      
+      updateLayersUI() {
+         // UI for layers panel, skipping full implementation for brevity but structural stub
+      }
+      updateFramesUI() {
+         // UI for frames panel
+      }
+      
+      spawnTextEditor(screenX, screenY, worldPt, element, isSticky = false, isNew = false) {
+         const textarea = document.createElement('textarea');
+         textarea.className = 'bg-transparent border-0 outline-none resize-none whitespace-pre-wrap overflow-hidden';
+         textarea.style.position = 'fixed'; // Use fixed position to match screenX/Y precisely
+         textarea.style.left = screenX + 'px';
+         textarea.style.top = screenY + 'px';
+         textarea.style.zIndex = '100000';
+         
+         if (isSticky) {
+             textarea.style.transform = 'translate(-50%, -50%)';
+             textarea.style.color = '#1f2937';
+             textarea.style.fontFamily = 'Inter';
+             textarea.style.fontSize = (16 * this.viewport.zoom) + 'px';
+             textarea.style.width = Math.max(100 * this.viewport.zoom, element.width * this.viewport.zoom * 0.9) + 'px';
+             textarea.style.height = Math.max(100 * this.viewport.zoom, element.height * this.viewport.zoom * 0.9) + 'px';
+             textarea.style.textAlign = 'center';
+         } else {
+             textarea.style.color = element.strokeColor || '#ffffff';
+             textarea.style.fontFamily = element.fontFamily || 'Inter';
+             textarea.style.fontWeight = element.fontWeight || 400;
+             textarea.style.fontStyle = element.fontStyle || 'normal';
+             textarea.style.fontSize = (element.fontSize * this.viewport.zoom) + 'px';
+             textarea.style.lineHeight = element.lineHeight || 1.5;
+             // Ensure line heights and spacing look exactly the same while typing
+             textarea.style.padding = '0'; 
+             textarea.style.margin = '0';
+             
+             // Base width on existing bounds if available, otherwise large default to prevent wrapping
+             const bb = element.width ? (element.width * this.viewport.zoom) : 2000;
+             textarea.style.width = Math.max(300, bb + 50) + 'px'; 
+             textarea.style.minHeight = (element.fontSize * this.viewport.zoom * 1.5) + 'px';
+             textarea.style.textAlign = element.textAlign || 'left';
+         }
+         
+         textarea.value = element.text || '';
+         document.body.appendChild(textarea);
+         
+         // Auto-expand and contract
+         const autoResize = () => {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+            if (!isSticky) {
+               textarea.style.width = 'auto';
+               textarea.style.width = Math.max(50, textarea.scrollWidth + 10) + 'px';
+            }
+         };
+         textarea.addEventListener('input', autoResize);
+         autoResize();
+         
+         // Focus immediately
+         setTimeout(() => { textarea.focus(); textarea.setSelectionRange(textarea.value.length, textarea.value.length); }, 10);
+         
+         let committed = false;
+         const commit = () => {
+             if (committed) return;
+             committed = true;
+             const newText = textarea.value.trimEnd(); // Keep leading spaces if they want margins, but trim end
+             if (newText) {
+                 if (isNew) { // New element
+                     element.text = newText;
+                     element.x = worldPt.x - (isSticky ? element.width/2 : 0);
+                     // the text element calculates its own natural width/height during render
+                     element.y = worldPt.y - (isSticky ? element.height/2 : 0);
+                     this.history.execute(new AddElementCommand(this.board, element));
+                 } else { // Modifying existing
+                     if (element.text !== newText) {
+                         this.history.execute(new ModifyElementCommand(element, 'text', element.text || '', newText));
+                     }
+                 }
+             } else {
+                 if (isNew) {
+                     // Cancelled empty create
+                 } else {
+                     if (element.type === 'text') {
+                         // Empty text deletes text elements entirely
+                         this.history.execute(new RemoveElementsCommand(this.board, [element]));
+                     } else {
+                         // Empty text just clears the string on shapes/stickies
+                         if (element.text && element.text !== '') {
+                             this.history.execute(new ModifyElementCommand(element, 'text', element.text, ''));
+                         }
+                     }
+                 }
+             }
+             if (textarea.parentNode) textarea.parentNode.removeChild(textarea);
+             if (this.toolManager.currentTool === 'text') {
+               this.toolManager.setTool('select');
+             }
+             this.markDirty();
+         };
+         
+         textarea.addEventListener('blur', commit);
+         textarea.addEventListener('keydown', (e) => {
+             if (e.key === 'Escape') {
+               textarea.value = element.text || ''; // Revert on escape
+               commit();
+             }
+             // Shift+Enter for newline, Enter to commit
+             if (e.key === 'Enter' && !e.shiftKey) {
+                 e.preventDefault();
+                 commit();
+             }
+         });
+      }
+      
+      markDirty() {
+        this.isDirty = true;
+        this.updateUI(); // Quick UI update when dirty
+        this.scheduleAutoSave();
+      }
+      
+      scheduleAutoSave() {
+        if (this.saveTimeout) clearTimeout(this.saveTimeout);
+        document.getElementById('save-dot').className = 'w-2 h-2 rounded-full bg-amber-500 anim-pulse-dot';
+        document.getElementById('save-status').textContent = 'Saving...';
+        
+        this.saveTimeout = setTimeout(() => {
+          this.saveToIndexedDB();
+        }, 1000);
+      }
+      
+      saveToIndexedDB() {
+        try {
+          const data = this.board.toJSON();
+          localStorage.setItem('whiteboard_auto_save', data);
+          document.getElementById('save-dot').className = 'w-2 h-2 rounded-full bg-green-500';
+          document.getElementById('save-status').textContent = 'Saved';
+        } catch (e) {
+          console.error('Save failed', e);
+          document.getElementById('save-dot').className = 'w-2 h-2 rounded-full bg-red-500';
+          document.getElementById('save-status').textContent = 'Error';
+          this.showToast('Failed to auto-save', 'error');
+        }
+      }
+      
+      loadFromIndexedDB() {
+        try {
+          const data = localStorage.getItem('whiteboard_auto_save');
+          if (data) {
+            this.board.fromJSON(data);
+            this.markDirty();
+            this.showToast('Board loaded from auto-save', 'success');
+          }
+        } catch(e) {
+          console.error('Load failed', e);
+        }
+      }
+      
+      showToast(message, type = 'info') {
+         const container = document.getElementById('toast-container');
+         const toast = document.createElement('div');
+         
+         toast.className = 'glass-heavy px-4 py-2 rounded-full text-sm font-medium text-white shadow-lg flex items-center gap-2 transform translate-y-4 opacity-0 transition-all duration-300 pointer-events-auto';
+         
+         let icon = '';
+         if (type === 'success') icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+         else if (type === 'error') icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+         else icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+         
+         toast.innerHTML = `${icon} <span>${message}</span>`;
+         container.appendChild(toast);
+         
+         // Animate in
+         requestAnimationFrame(() => {
+           toast.classList.remove('translate-y-4', 'opacity-0');
+         });
+         
+         setTimeout(() => {
+           toast.classList.add('translate-y-4', 'opacity-0');
+           setTimeout(() => toast.remove(), 300);
+         }, +type === 'error' ? 5000 : 3000);
+      }
+      
+      resize() {
+        this.canvas.width = window.innerWidth * this.dpr;
+        this.canvas.height = window.innerHeight * this.dpr;
+        this.ctx.scale(this.dpr, this.dpr);
+        this.markDirty();
+      }
+      
+      screenToWorld(sx, sy) {
+        return {
+          x: (sx / this.dpr - this.viewport.x) / this.viewport.zoom,
+          y: (sy / this.dpr - this.viewport.y) / this.viewport.zoom
+        };
+      }
+      
+      worldToScreen(wx, wy) {
+        return {
+          x: (wx * this.viewport.zoom + this.viewport.x) * this.dpr,
+          y: (wy * this.viewport.zoom + this.viewport.y) * this.dpr
+        };
+      }
+      
+      render() {
+        if (this.isDirty) {
+          this.ctx.clearRect(0, 0, this.canvas.width / this.dpr, this.canvas.height / this.dpr);
+          
+          this.ctx.save();
+          this.ctx.setTransform(this.viewport.zoom * this.dpr, 0, 0, this.viewport.zoom * this.dpr, this.viewport.x * this.dpr, this.viewport.y * this.dpr);
+          
+          // Render Grid
+          this.gridRenderer.render(this.ctx);
+          
+          // Render Elements
+          const elements = this.board.getAllElements();
+          for (const el of elements) {
+            this.ctx.save();
+            this.ctx.globalAlpha = el.opacity !== undefined ? el.opacity : 1;
+            if (el.rotation) {
+              const cx = el.x + el.width/2;
+              const cy = el.y + el.height/2;
+              this.ctx.translate(cx, cy);
+              this.ctx.rotate(el.rotation);
+              this.ctx.translate(-cx, -cy);
+            }
+            el.render(this.ctx);
+            this.ctx.restore();
+          }
+
+          // Render active tool preview
+          const tool = this.toolManager.getActiveTool();
+          if (tool && tool.onRender) {
+            tool.onRender(this.ctx);
+          }
+          
+          // Render selection
+          
+          // Render snap guidelines
+          if (this.snapLines && this.snapLines.length > 0) {
+            this.ctx.save();
+            this.ctx.lineWidth = 1 / this.viewport.zoom;
+            this.ctx.strokeStyle = 'rgba(99, 102, 241, 0.6)';
+            this.ctx.beginPath();
+            for (const line of this.snapLines) {
+              this.ctx.moveTo(line.x1, line.y1);
+              this.ctx.lineTo(line.x2, line.y2);
+            }
+            this.ctx.stroke();
+            this.ctx.restore();
+          }
+
+          this.ctx.restore();
+          
+          // Render screen-space overlays (minimap, cursors, etc)
+          this.isDirty = false;
+        }
+        requestAnimationFrame(this.render);
+      }
+      
+
+    }
+
+    // System Initialization & Logic
+    let engine;
+    const initApp = () => {
+      new AmbientBackground('bg-canvas');
+      engine = new CanvasEngine('canvas');
+      window.whiteboardEngine = engine; // Expose globally for console debugging
+      
+      engine.loadFromIndexedDB();
+      
+      const minimapHeader = document.getElementById('minimap-header');
+      const minimapContent = document.getElementById('minimap-content');
+      const minimapIcon = document.getElementById('minimap-icon');
+      let isMinimapOpen = true;
+      
+      minimapHeader.onclick = () => {
+        isMinimapOpen = !isMinimapOpen;
+        if (isMinimapOpen) {
+          minimapContent.style.height = '124px';
+          minimapIcon.style.transform = 'rotate(0deg)';
+        } else {
+          minimapContent.style.height = '0px';
+          minimapIcon.style.transform = 'rotate(180deg)';
+        }
+      };
+      
+      document.getElementById('btn-export-json').onclick = () => {
+         const data = engine.board.toJSON();
+         const blob = new Blob([data], {type: 'application/json'});
+         const url = URL.createObjectURL(blob);
+         const a = document.createElement('a');
+         a.href = url; a.download = 'whiteboard.json';
+         a.click();
+         URL.revokeObjectURL(url);
+         engine.showToast('Project saved as JSON', 'success');
+      };
+      
+      const downloadExport = (format) => {
+         // Create a temporary canvas for exporting
+         const exportCanvas = document.createElement('canvas');
+         exportCanvas.width = engine.canvas.width;
+         exportCanvas.height = engine.canvas.height;
+         const exportCtx = exportCanvas.getContext('2d', { alpha: format === 'image/png' });
+         
+         if (format === 'image/jpeg') {
+            exportCtx.fillStyle = '#0d1117'; // Set background color since JPEG has no alpha
+            exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+         }
+         
+         // Setup viewport transform (zoom/pan) exactly as visible on screen
+         exportCtx.translate(exportCanvas.width / 2, exportCanvas.height / 2);
+         exportCtx.scale(engine.viewport.zoom, engine.viewport.zoom);
+         exportCtx.translate(-engine.viewport.x, -engine.viewport.y);
+         
+         // Render the board elements (without UI, guides, grid, etc)
+         engine.board.render(exportCtx);
+         
+         exportCanvas.toBlob((blob) => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `whiteboard_export.${format === 'image/png' ? 'png' : 'jpg'}`;
+            a.click();
+            URL.revokeObjectURL(url);
+            engine.showToast(`Exported as ${format === 'image/png' ? 'PNG' : 'JPEG'}`, 'success');
+         }, format, 0.95);
+      };
+      
+      document.getElementById('btn-export-png').onclick = () => downloadExport('image/png');
+      document.getElementById('btn-export-jpeg').onclick = () => downloadExport('image/jpeg');
+      
+      document.getElementById('btn-export-svg').onclick = () => {
+         // Basic SVG export mapping shapes and text
+         engine.showToast('Generating Vector SVG...', 'info');
+         let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${engine.canvas.width}" height="${engine.canvas.height}">`;
+         
+         // Create an SVG group scaled and translated to viewport
+         svgContent += `<g transform="translate(${engine.canvas.width/2}, ${engine.canvas.height/2}) scale(${engine.viewport.zoom}) translate(-${engine.viewport.x}, -${engine.viewport.y})">`;
+         
+         const els = engine.board.getAllElements();
+         for(const el of els) {
+            const rot = el.rotation ? ` transform="rotate(${(el.rotation * 180)/Math.PI} ${el.x + el.width/2} ${el.y + el.height/2})"` : '';
+            const opacity = el.opacity !== undefined ? ` opacity="${el.opacity}"` : '';
+            
+            if (el.type === 'rect') {
+              const dash = el.dashStyle && el.dashStyle.length ? ` stroke-dasharray="${el.dashStyle.join(',')}"` : '';
+              svgContent += `<rect x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" fill="${el.fillColor}" stroke="${el.strokeColor}" stroke-width="${el.strokeWidth}" rx="${el.borderRadius || 0}"${rot}${opacity}${dash} />`;
+            } else if (el.type === 'ellipse') {
+              const dash = el.dashStyle && el.dashStyle.length ? ` stroke-dasharray="${el.dashStyle.join(',')}"` : '';
+              svgContent += `<ellipse cx="${el.x + el.width/2}" cy="${el.y + el.height/2}" rx="${el.width/2}" ry="${el.height/2}" fill="${el.fillColor}" stroke="${el.strokeColor}" stroke-width="${el.strokeWidth}"${rot}${opacity}${dash} />`;
+            } else if (el.type === 'text') {
+              svgContent += `<text x="${el.x}" y="${el.y + el.fontSize}" font-family="${el.fontFamily}" font-size="${el.fontSize}" fill="${el.strokeColor}" font-weight="${el.fontWeight || 400}" font-style="${el.fontStyle || 'normal'}"${rot}${opacity}>${el.text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</text>`;
+            } else if (el.type === 'line' || el.type === 'arrow') {
+               const dash = el.dashStyle && el.dashStyle.length ? ` stroke-dasharray="${el.dashStyle.join(',')}"` : '';
+               svgContent += `<line x1="${el.x}" y1="${el.y}" x2="${el.x2}" y2="${el.y2}" stroke="${el.strokeColor}" stroke-width="${el.strokeWidth}" stroke-linecap="round"${opacity}${dash} />`;
+            } else if (el.type === 'stroke') {
+               // highly simplified path for freehand
+               if(el.points && el.points.length > 0) {
+                 let d = `M ${el.points[0].x} ${el.points[0].y}`;
+                 for(let i=1; i<el.points.length; i++) d += ` L ${el.points[i].x} ${el.points[i].y}`;
+                 svgContent += `<path d="${d}" stroke="${el.strokeColor}" stroke-width="${el.strokeWidth}" fill="none" stroke-linecap="round" stroke-linejoin="round"${opacity} />`;
+               }
+            } else if (el.type === 'sticky') {
+               svgContent += `<rect x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" fill="${el.noteColor}" stroke="rgba(0,0,0,0.1)" stroke-width="1" rx="8"${rot}${opacity} />`;
+               svgContent += `<text x="${el.x + el.width/2}" y="${el.y + el.height/2}" font-family="Inter" font-size="16" fill="#1f2937" text-anchor="middle" dominant-baseline="middle"${rot}${opacity}>${(el.text||'').replace(/</g, "&lt;").replace(/>/g, "&gt;")}</text>`;
+            }
+         }
+         
+         svgContent += `</g></svg>`;
+         
+         const blob = new Blob([svgContent], {type: 'image/svg+xml'});
+         const url = URL.createObjectURL(blob);
+         const a = document.createElement('a');
+         a.href = url; a.download = 'whiteboard_export.svg';
+         a.click();
+         URL.revokeObjectURL(url);
+         engine.showToast('Exported Vector SVG', 'success');
+      };
+      
+      document.getElementById('btn-share').onclick = () => {
+         engine.showToast('Share link copied to clipboard', 'success');
+      };
+    };
+
+    // Simulate loading screen
+    window.addEventListener('load', () => {
+      const statuses = ["Initializing canvas...", "Loading assets...", "Almost ready..."];
+      const statusEl = document.getElementById('loading-status');
+      
+      setTimeout(() => statusEl.textContent = statuses[1], 400);
+      setTimeout(() => statusEl.textContent = statuses[2], 900);
+      
+      setTimeout(() => {
+        const loader = document.getElementById('loading-screen');
+        loader.style.opacity = '0';
+        loader.style.pointerEvents = 'none';
+        
+        setTimeout(() => {
+          loader.style.display = 'none';
+          document.getElementById('ui-container').style.opacity = '1';
+          initApp();
+        }, 500);
+      }, 1400);
+    });
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(err => {
+          console.error('ServiceWorker registration failed: ', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
