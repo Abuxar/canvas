@@ -170,7 +170,73 @@
   <!-- UI Container z-index 10 -->
   <div id="ui-container" class="fixed inset-0 pointer-events-none z-10" style="opacity: 0; transition: opacity 0.5s ease;">
     
-
+    <!-- Top Nav -->
+    <header class="glass absolute top-0 left-0 right-0 z-50 pointer-events-auto flex items-center justify-between px-4" style="height: 56px;">
+      <div class="flex items-center gap-3">
+        <div class="anim-glow flex items-center justify-center font-bold text-white shadow-lg" 
+             style="width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #4f46e5, #9333ea);">
+          W
+        </div>
+        <div class="font-semibold text-white tracking-wide">Whiteboard</div>
+        <div class="glass-heavy text-xs px-2 py-0.5 rounded-full font-mono text-indigo-300">v1.0</div>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex -space-x-2">
+          <div class="w-7 h-7 rounded-full border border-indigo-500/30 flex items-center justify-center text-xs font-bold bg-gradient-to-br from-indigo-500 to-purple-600 relative">
+            A
+            <div class="absolute bottom-0 right-0 w-2 h-2 bg-green-400 rounded-full border border-gray-900 anim-pulse-dot"></div>
+          </div>
+          <div class="w-7 h-7 rounded-full border border-cyan-500/30 flex items-center justify-center text-xs font-bold bg-gradient-to-br from-cyan-500 to-blue-600">M</div>
+          <div class="w-7 h-7 rounded-full border border-amber-500/30 flex items-center justify-center text-xs font-bold bg-gradient-to-br from-amber-500 to-orange-600">J</div>
+        </div>
+        <div class="w-px h-6 bg-white/10"></div>
+        <button id="btn-share" class="glass-heavy w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 hover:-translate-y-0.5 transition-all text-white">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+        </button>
+        <div class="relative group">
+          <button id="btn-export" class="glass-heavy w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all text-white relative z-10">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          </button>
+          
+          <!-- Dropdown Menu -->
+          <div class="absolute right-0 top-full mt-3 w-56 glass-heavy rounded-2xl p-1.5 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all z-50 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 origin-top-right transform group-hover:scale-100 scale-95 duration-200 backdrop-blur-2xl bg-gray-900/60">
+            <div class="px-3 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Export As</div>
+            <button id="btn-export-png" class="w-full text-left px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-indigo-500/20 rounded-xl transition-all flex items-center justify-between group/item">
+              <span class="flex items-center gap-3">
+                <span class="w-7 h-7 rounded-lg bg-indigo-500/20 flex items-center justify-center text-[10px] font-black text-indigo-400 border border-indigo-500/20">PNG</span>
+                <span class="font-medium whitespace-nowrap">Image (Alpha)</span>
+              </span>
+              <svg class="opacity-0 group-hover/item:opacity-100 transition-opacity" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+            <button id="btn-export-jpeg" class="w-full text-left px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-blue-500/20 rounded-xl transition-all flex items-center justify-between group/item">
+              <span class="flex items-center gap-3">
+                <span class="w-7 h-7 rounded-lg bg-blue-500/20 flex items-center justify-center text-[10px] font-black text-blue-400 border border-blue-500/20">JPG</span>
+                <span class="font-medium whitespace-nowrap">Flat Photo</span>
+              </span>
+              <svg class="opacity-0 group-hover/item:opacity-100 transition-opacity" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+            <button id="btn-export-svg" class="w-full text-left px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-orange-500/20 rounded-xl transition-all flex items-center justify-between group/item">
+              <span class="flex items-center gap-3">
+                <span class="w-7 h-7 rounded-lg bg-orange-500/20 flex items-center justify-center text-[10px] font-black text-orange-400 border border-orange-500/20">SVG</span>
+                <span class="font-medium whitespace-nowrap">Vector Illustration</span>
+              </span>
+              <svg class="opacity-0 group-hover/item:opacity-100 transition-opacity" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+            <div class="h-px bg-white/5 my-1.5 mx-2"></div>
+            <button id="btn-export-json" class="w-full text-left px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-emerald-500/20 rounded-xl transition-all flex items-center justify-between group/item">
+              <span class="flex items-center gap-3">
+                <span class="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center text-[10px] font-black text-emerald-400 border border-emerald-500/20">JSON</span>
+                <span class="font-medium whitespace-nowrap">Project Source</span>
+              </span>
+              <svg class="opacity-0 group-hover/item:opacity-100 transition-opacity" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+        </div>
+        <button id="btn-settings" class="glass-heavy w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 hover:-translate-y-0.5 transition-all text-white">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+      </div>
+    </header>
 
     <!-- Context Toolbar -->
     <div class="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 pointer-events-auto glass-heavy rounded-full p-1" style="top: 64px;">
@@ -193,7 +259,7 @@
     </div>
 
     <!-- Right Properties Panel -->
-    <aside id="properties-panel" class="absolute right-0 w-[264px] rounded-l-[20px] pointer-events-auto glass-heavy flex flex-col overflow-y-auto z-40" style="top: 56px; bottom: 36px;">
+    <aside id="properties-panel" class="absolute right-0 w-[264px] rounded-l-[20px] pointer-events-auto glass-heavy flex flex-col overflow-y-auto" style="top: 56px; bottom: 36px;">
       <div class="p-4 border-b border-white/5 disabled-group text-sm">
         <label class="block text-gray-300 mb-2 font-medium">Stroke Color</label>
         <div class="flex items-center gap-2 mb-3">
@@ -201,88 +267,19 @@
             <input type="color" id="prop-stroke" class="absolute opacity-0 w-10 h-10 -top-2 -left-2 cursor-pointer" value="#6366f1">
           </label>
           <div class="flex gap-1.5 flex-wrap">
+            <!-- Swatches will be injected -->
             <button class="color-swatch w-5 h-5 rounded-sm bg-white border border-white/20 hover:scale-110 transition-transform" data-color="#ffffff"></button>
             <button class="color-swatch w-5 h-5 rounded-sm bg-gray-500 border border-white/20 hover:scale-110 transition-transform" data-color="#6b7280"></button>
             <button class="color-swatch w-5 h-5 rounded-sm bg-red-500 border border-white/20 hover:scale-110 transition-transform" data-color="#ef4444"></button>
             <button class="color-swatch w-5 h-5 rounded-sm bg-amber-500 border border-white/20 hover:scale-110 transition-transform" data-color="#f59e0b"></button>
             <button class="color-swatch w-5 h-5 rounded-sm bg-green-500 border border-white/20 hover:scale-110 transition-transform" data-color="#10b981"></button>
             <button class="color-swatch w-5 h-5 rounded-sm bg-indigo-500 border border-white/20 hover:scale-110 transition-transform" data-color="#6366f1"></button>
+            <!-- Custom color picker button -->
             <label class="w-5 h-5 rounded-sm cursor-pointer hover:scale-110 transition-transform overflow-hidden relative border border-white/20" title="More Colors (RGB)" style="background: conic-gradient(from 180deg at 50% 50%, #f00 0deg, #ff0 60deg, #0f0 120deg, #0ff 180deg, #00f 240deg, #f0f 300deg, #f00 360deg);">
               <input type="color" id="prop-stroke-custom" class="absolute opacity-0 w-10 h-10 -top-2 -left-2 cursor-pointer" value="#ffffff">
             </label>
           </div>
         </div>
-      </div>
-    </aside>
-
-    <!-- Top Nav moved to follow properties-panel for natural top-stacking -->
-    <header class="glass absolute top-0 left-0 right-0 z-[999] pointer-events-auto flex items-center justify-between px-4" style="height: 56px;">
-      <div class="flex items-center gap-3">
-        <div class="anim-glow flex items-center justify-center font-bold text-white shadow-lg" 
-             style="width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #4f46e5, #9333ea);">
-          W
-        </div>
-        <div class="font-semibold text-white tracking-wide">Whiteboard</div>
-        <div class="glass-heavy text-xs px-2 py-0.5 rounded-full font-mono text-indigo-300">v1.0</div>
-      </div>
-      <div class="flex items-center gap-4">
-        <div class="flex -space-x-2">
-          <div class="w-7 h-7 rounded-full border border-indigo-500/30 flex items-center justify-center text-xs font-bold bg-gradient-to-br from-indigo-500 to-purple-600 relative">
-            A
-            <div class="absolute bottom-0 right-0 w-2 h-2 bg-green-400 rounded-full border border-gray-900 anim-pulse-dot"></div>
-          </div>
-          <div class="w-7 h-7 rounded-full border border-cyan-500/30 flex items-center justify-center text-xs font-bold bg-gradient-to-br from-cyan-500 to-blue-600">M</div>
-          <div class="w-7 h-7 rounded-full border border-amber-500/30 flex items-center justify-center text-xs font-bold bg-gradient-to-br from-amber-500 to-orange-600">J</div>
-        </div>
-        <div class="w-px h-6 bg-white/10"></div>
-        <button id="btn-share" class="glass-heavy w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all text-white">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-        </button>
-        <div class="relative group">
-          <button id="btn-export" class="glass-heavy w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all text-white relative z-10">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          </button>
-          
-          <!-- Dropdown Menu -->
-          <div class="absolute right-0 top-full mt-3 w-64 rounded-2xl p-1.5 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all z-[1000] shadow-[0_20px_50px_rgba(0,0,0,1)] border border-white/20 origin-top-right transform group-hover:scale-100 scale-95 duration-200 bg-[#0d1117]">
-            <div class="px-4 py-3 text-[10px] font-bold text-gray-500 uppercase tracking-[2px] border-b border-white/5 mb-1.5">Export Project</div>
-            
-            <button id="btn-export-png" class="w-full text-left px-3 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-all flex items-center justify-between group/item">
-              <span class="flex items-center gap-4">
-                <span class="w-10 h-10 rounded-xl bg-indigo-600/20 flex items-center justify-center text-[11px] font-black text-indigo-400 border border-indigo-500/20 shadow-inner">PNG</span>
-                <span class="font-semibold tracking-tight text-gray-100">Image (Transparent)</span>
-              </span>
-            </button>
-            
-            <button id="btn-export-jpeg" class="w-full text-left px-3 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-all flex items-center justify-between group/item">
-              <span class="flex items-center gap-4">
-                <span class="w-10 h-10 rounded-xl bg-blue-600/20 flex items-center justify-center text-[11px] font-black text-blue-400 border border-blue-500/20 shadow-inner">JPG</span>
-                <span class="font-semibold tracking-tight text-gray-100">Flat Photo</span>
-              </span>
-            </button>
-            
-            <button id="btn-export-svg" class="w-full text-left px-3 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-xl transition-all flex items-center justify-between group/item">
-              <span class="flex items-center gap-4">
-                <span class="w-10 h-10 rounded-xl bg-orange-600/20 flex items-center justify-center text-[11px] font-black text-orange-400 border border-orange-500/20 shadow-inner">SVG</span>
-                <span class="font-semibold tracking-tight text-gray-100">Vector Illustration</span>
-              </span>
-            </button>
-            
-            <div class="h-px bg-white/5 my-2 mx-3"></div>
-            
-            <button id="btn-export-json" class="w-full text-left px-3 py-3 text-sm text-gray-300 hover:text-white hover:bg-white/10 rounded-xl transition-all flex items-center justify-between group/item">
-              <span class="flex items-center gap-4">
-                <span class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-[11px] font-black text-emerald-400 border border-emerald-500/20 shadow-inner">JSON</span>
-                <span class="font-semibold tracking-tight">Project Source File</span>
-              </span>
-            </button>
-          </div>
-        </div>
-        <button id="btn-settings" class="glass-heavy w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/10 transition-all text-white">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-        </button>
-      </div>
-    </header>
         
         <label class="block text-gray-300 mb-2 mt-4 font-medium">Fill Color</label>
         <div class="flex items-center gap-2">

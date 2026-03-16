@@ -1,1 +1,1 @@
-# canvas
+# Canvas - Infinite Whiteboard
