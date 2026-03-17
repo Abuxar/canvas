@@ -932,6 +932,23 @@
       return result;
     };
 
+    Board.prototype.render = function(ctx) {
+      const elements = this.getAllElements();
+      for (const el of elements) {
+        ctx.save();
+        ctx.globalAlpha = el.opacity !== undefined ? el.opacity : 1;
+        if (el.rotation) {
+          const cx = el.x + el.width/2;
+          const cy = el.y + el.height/2;
+          ctx.translate(cx, cy);
+          ctx.rotate(el.rotation);
+          ctx.translate(-cx, -cy);
+        }
+        el.render(ctx);
+        ctx.restore();
+      }
+    };
+
     class GridRenderer {
       constructor(engine) {
         this.engine = engine;
@@ -2637,20 +2654,7 @@
           this.gridRenderer.render(this.ctx);
           
           // Render Elements
-          const elements = this.board.getAllElements();
-          for (const el of elements) {
-            this.ctx.save();
-            this.ctx.globalAlpha = el.opacity !== undefined ? el.opacity : 1;
-            if (el.rotation) {
-              const cx = el.x + el.width/2;
-              const cy = el.y + el.height/2;
-              this.ctx.translate(cx, cy);
-              this.ctx.rotate(el.rotation);
-              this.ctx.translate(-cx, -cy);
-            }
-            el.render(this.ctx);
-            this.ctx.restore();
-          }
+          this.board.render(this.ctx);
 
           // Render active tool preview
           const tool = this.toolManager.getActiveTool();
@@ -2733,10 +2737,14 @@
             exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
          }
          
-         // Setup viewport transform (zoom/pan) exactly as visible on screen
-         exportCtx.translate(exportCanvas.width / 2, exportCanvas.height / 2);
-         exportCtx.scale(engine.viewport.zoom, engine.viewport.zoom);
-         exportCtx.translate(-engine.viewport.x, -engine.viewport.y);
+         // Setup viewport transform exactly as visible on screen
+         exportCtx.setTransform(
+           engine.viewport.zoom * engine.dpr, 
+           0, 0, 
+           engine.viewport.zoom * engine.dpr, 
+           engine.viewport.x * engine.dpr, 
+           engine.viewport.y * engine.dpr
+         );
          
          // Render the board elements (without UI, guides, grid, etc)
          engine.board.render(exportCtx);
@@ -2761,7 +2769,7 @@
          let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${engine.canvas.width}" height="${engine.canvas.height}">`;
          
          // Create an SVG group scaled and translated to viewport
-         svgContent += `<g transform="translate(${engine.canvas.width/2}, ${engine.canvas.height/2}) scale(${engine.viewport.zoom}) translate(-${engine.viewport.x}, -${engine.viewport.y})">`;
+         svgContent += `<g transform="translate(${engine.viewport.x * engine.dpr}, ${engine.viewport.y * engine.dpr}) scale(${engine.viewport.zoom * engine.dpr})">`;
          
          const els = engine.board.getAllElements();
          for(const el of els) {
@@ -2782,11 +2790,12 @@
             } else if (el.type === 'stroke') {
                // highly simplified path for freehand
                if(el.points && el.points.length > 0) {
-                 let d = `M ${el.points[0].x} ${el.points[0].y}`;
-                 for(let i=1; i<el.points.length; i++) d += ` L ${el.points[i].x} ${el.points[i].y}`;
+                 let d = `M ${el.points[0][0]} ${el.points[0][1]}`;
+                 for(let i=1; i<el.points.length; i++) d += ` L ${el.points[i][0]} ${el.points[i][1]}`;
                  svgContent += `<path d="${d}" stroke="${el.strokeColor}" stroke-width="${el.strokeWidth}" fill="none" stroke-linecap="round" stroke-linejoin="round"${opacity} />`;
                }
-            } else if (el.type === 'sticky') {
+            }
+ else if (el.type === 'sticky') {
                svgContent += `<rect x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" fill="${el.noteColor}" stroke="rgba(0,0,0,0.1)" stroke-width="1" rx="8"${rot}${opacity} />`;
                svgContent += `<text x="${el.x + el.width/2}" y="${el.y + el.height/2}" font-family="Inter" font-size="16" fill="#1f2937" text-anchor="middle" dominant-baseline="middle"${rot}${opacity}>${(el.text||'').replace(/</g, "&lt;").replace(/>/g, "&gt;")}</text>`;
             }
