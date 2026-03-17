@@ -911,9 +911,15 @@
       }
       
       fromJSON(data) {
-        if (data && data.layers) {
-          this.layers = data.layers;
-        }
+        if (!data || !data.layers) return;
+        this.layers = data.layers.map(layerData => {
+          const layer = new Layer(layerData.name);
+          layer.id = layerData.id;
+          layer.visible = layerData.visible;
+          layer.locked = layerData.locked;
+          layer.elements = (layerData.elements || []).map(elData => Element.fromJSON(elData));
+          return layer;
+        });
       }
     }
 
@@ -2572,7 +2578,7 @@
       
       saveToIndexedDB() {
         try {
-          const data = this.board.toJSON();
+          const data = JSON.stringify(this.board.toJSON());
           localStorage.setItem('whiteboard_auto_save', data);
           document.getElementById('save-dot').className = 'w-2 h-2 rounded-full bg-green-500';
           document.getElementById('save-status').textContent = 'Saved';
@@ -2586,8 +2592,9 @@
       
       loadFromIndexedDB() {
         try {
-          const data = localStorage.getItem('whiteboard_auto_save');
-          if (data) {
+          const raw = localStorage.getItem('whiteboard_auto_save');
+          if (raw) {
+            const data = JSON.parse(raw);
             this.board.fromJSON(data);
             this.markDirty();
             this.showToast('Board loaded from auto-save', 'success');
